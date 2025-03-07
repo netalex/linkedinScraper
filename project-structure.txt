@@ -1,0 +1,29 @@
+linkedin-job-scraper/
+│
+├── .gitignore                  # File di gitignore per Python
+├── requirements.txt            # Dipendenze del progetto
+├── README.md                   # Documentazione del progetto
+├── setup.py                    # Script di installazione del pacchetto
+├── .env.example                # Esempio di file di configurazione
+│
+├── linkedin_job_scraper/       # Package principale
+│   ├── __init__.py             # Definizione del pacchetto
+│   ├── __main__.py             # Punto di ingresso per esecuzione diretta
+│   ├── config.py               # Configurazioni del progetto
+│   ├── scraper.py              # Funzionalità di scraping principale
+│   ├── api.py                  # Funzioni per interagire con le API di LinkedIn
+│   ├── models.py               # Modelli di dati e schema JSON
+│   ├── utils.py                # Utilità varie
+│   └── cli.py                  # Interfaccia a riga di comando
+│
+├── exporters/                  # Modulo per l'esportazione dei dati
+│   ├── __init__.py
+│   ├── json_exporter.py        # Esportazione in formato JSON
+│   ├── claude_exporter.py      # Preparazione di prompt per Claude
+│   └── application_tracker.py  # Integrazione con application tracker
+│
+└── tests/                      # Test unitari
+    ├── __init__.py
+    ├── test_scraper.py
+    ├── test_api.py
+    └── test_exporters.py
