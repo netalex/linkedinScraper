@@ -655,3 +655,186 @@ def extract_data_from_api_response(api_response: Dict[str, Any], job_url: str) -
     job_data["Hiring Manager Image"] = None
     
     return job_data
+
+    def scrape_linkedin_job(job_url: str, min_delay: int = 1, max_delay: int = 3,
+                       proxy_url: str = None) -> Optional[Dict[str, Any]]:
+    """
+    Scrape a LinkedIn job posting and return the data in the required format.
+    
+    Args:
+        job_url: URL of the LinkedIn job posting
+        min_delay: Minimum delay before API request in seconds
+        max_delay: Maximum delay before API request in seconds
+        proxy_url: Proxy URL to use for requests
+        
+    Returns:
+        Dictionary containing job data if successful, None otherwise
+    """
+    job_id = extract_job_id_from_url(job_url)
+    if not job_id:
+        logging.error(f"Impossibile estrarre l'ID dell'offerta dall'URL: {job_url}")
+        return None
+    
+    logging.info(f"ID offerta estratto: {job_id}")
+    
+    # First, try using the API endpoint
+    api_response = try_api_endpoint(job_id, min_delay, max_delay, proxy_url)
+    if api_response:
+        logging.info("Dati recuperati con successo dall'endpoint API")
+        job_data = extract_data_from_api_response(api_response, job_url)
+    else:
+        logging.info("Failed to retrieve data from API endpoint, falling back to HTML scraping")
+        # Fall back to scraping the HTML page
+        headers = get_request_headers()
+        html_content = make_request_with_backoff(job_url, headers, proxy_url=proxy_url)
+        if not html_content:
+            logging.error("Impossibile recuperare il contenuto HTML")
+            return None
+        
+        job_data = extract_data_from_html(html_content, job_url)
+    
+    # Valida e pulisci i dati
+    if not validate_job_data(job_data):
+        logging.warning("I dati dell'offerta non sono conformi allo schema, tentativo di correzione...")
+        # Tentativo di correggere problemi comuni con i dati
+        job_data = clean_and_validate_job_data(job_data)
+        
+        if not validate_job_data(job_data):
+            logging.error("Impossibile validare i dati dell'offerta anche dopo la pulizia")
+    
+    # Arricchisci con campi per il tracciamento delle candidature se necessario
+    job_data = enrich_job_data_for_application(job_data)
+    
+    return job_data
+
+
+def clean_and_validate_job_data(job_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Pulisce e valida i dati dell'offerta per garantire la conformità allo schema.
+    
+    Args:
+        job_data: Dati grezzi dell'offerta
+        
+    Returns:
+        Dati dell'offerta puliti e validati
+    """
+    cleaned_data = job_data.copy()
+    
+    # Imposta valori predefiniti per i campi obbligatori che potrebbero mancare
+    if cleaned_data["Title"] is None:
+        cleaned_data["Title"] = "Offerta senza titolo"
+    
+    if cleaned_data["Description"] is None:
+        cleaned_data["Description"] = "Nessuna descrizione disponibile"
+    
+    if cleaned_data["Location"] is None:
+        cleaned_data["Location"] = "Remote"
+    
+    if cleaned_data["Company Name"] is None:
+        cleaned_data["Company Name"] = "Azienda sconosciuta"
+    
+    if cleaned_data["Industry"] is None:
+        cleaned_data["Industry"] = "Information Technology"
+    
+    if cleaned_data["Headquarters"] is None:
+        cleaned_data["Headquarters"] = "Sconosciuta"
+    
+    if cleaned_data["Specialties"] is None:
+        cleaned_data["Specialties"] = "Non specificato"
+    
+    if cleaned_data["Poster Id"] is None:
+        cleaned_data["Poster Id"] = "000000"
+    
+    if cleaned_data["Company Logo"] is None:
+        cleaned_data["Company Logo"] = "https://static.licdn.com/aero-v1/sc/h/dbvmk0tsk0o0hd59fi64z3own"
+    
+    if cleaned_data["Company Apply Url"] is None:
+        cleaned_data["Company Apply Url"] = cleaned_data["Detail URL"]
+    
+    if cleaned_data["Company Website"] is None:
+        cleaned_data["Company Website"] = "https://www.linkedin.com/"
+    
+    if cleaned_data["Company Description"] is None:
+        cleaned_data["Company Description"] = "Nessuna descrizione dell'azienda disponibile"
+    
+    # Assicurati che Created At sia una stringa di data in formato ISO valida
+    if cleaned_data["Created At"] is None:
+        # Se non abbiamo una data di creazione, usa 30 giorni fa come predefinito
+        thirty_days_ago = datetime.datetime.now() - datetime.timedelta(days=30)
+        cleaned_data["Created At"] = thirty_days_ago.isoformat()
+    
+    # Assicurati che Employee Count sia un intero
+    if cleaned_data["Employee Count"] is not None:
+        try:
+            cleaned_data["Employee Count"] = int(cleaned_data["Employee Count"])
+        except (ValueError, TypeError):
+            cleaned_data["Employee Count"] = None
+    
+    # Assicurati che Company Founded sia un intero
+    if cleaned_data["Company Founded"] is not None:
+        try:
+            cleaned_data["Company Founded"] = int(cleaned_data["Company Founded"])
+        except (ValueError, TypeError):
+            cleaned_data["Company Founded"] = None
+    
+    return cleaned_data
+
+
+def process_search_results(search_url: str, output_file: str, max_jobs: int = 100,
+                          min_delay: int = 2, max_delay: int = 5,
+                          proxy_url: str = None) -> Tuple[bool, List[Dict[str, Any]]]:
+    """
+    Elabora i risultati di ricerca di lavoro di LinkedIn.
+    
+    Args:
+        search_url: URL di ricerca lavoro di LinkedIn
+        output_file: Percorso del file di output per i dati JSON
+        max_jobs: Numero massimo di offerte da scrapare
+        min_delay: Ritardo minimo tra le richieste
+        max_delay: Ritardo massimo tra le richieste
+        proxy_url: URL del proxy da utilizzare per le richieste
+        
+    Returns:
+        Tupla di (successo, lista_dati_offerte)
+    """
+    logging.info(f"Elaborazione dei risultati di ricerca dall'URL: {search_url}")
+    
+    # Estrai gli ID delle offerte dai risultati di ricerca
+    job_ids = extract_job_ids_from_search(search_url, max_jobs, min_delay, max_delay, proxy_url)
+    
+    if not job_ids:
+        logging.error("Nessun ID offerta trovato nei risultati di ricerca")
+        return False, []
+    
+    logging.info(f"Trovati {len(job_ids)} ID offerta da elaborare")
+    
+    # Scraping di ogni offerta
+    all_jobs_data = []
+    for i, job_id in enumerate(job_ids):
+        job_url = f"https://www.linkedin.com/jobs/view/{job_id}/"
+        logging.info(f"Elaborazione offerta {i+1}/{len(job_ids)}: {job_url}")
+        
+        # Ritardo casuale prima di ogni richiesta
+        delay = random.uniform(min_delay, max_delay)
+        time.sleep(delay)
+        
+        job_data = scrape_linkedin_job(job_url, min_delay, max_delay, proxy_url)
+        if job_data:
+            all_jobs_data.append(job_data)
+            logging.info(f"Scraping offerta completato con successo: {job_data['Title']} presso {job_data['Company Name']}")
+        else:
+            logging.warning(f"Impossibile effettuare lo scraping dell'offerta con ID {job_id}")
+    
+    if not all_jobs_data:
+        logging.error("Impossibile effettuare lo scraping di alcuna offerta")
+        return False, []
+    
+    # Salva nel file JSON
+    try:
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(all_jobs_data, f, indent=2, ensure_ascii=False)
+        logging.info(f"Salvate {len(all_jobs_data)} offerte di lavoro in {output_file}")
+        return True, all_jobs_data
+    except Exception as e:
+        logging.error(f"Errore nel salvataggio dei dati delle offerte nel file: {str(e)}")
+        return False, all_jobs_data
