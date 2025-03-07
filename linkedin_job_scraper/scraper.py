@@ -656,7 +656,8 @@ def extract_data_from_api_response(api_response: Dict[str, Any], job_url: str) -
     
     return job_data
 
-    def scrape_linkedin_job(job_url: str, min_delay: int = 1, max_delay: int = 3,
+
+def scrape_linkedin_job(job_url: str, min_delay: int = 1, max_delay: int = 3,
                        proxy_url: str = None) -> Optional[Dict[str, Any]]:
     """
     Scrape a LinkedIn job posting and return the data in the required format.

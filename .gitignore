@@ -42,3 +42,9 @@ job_files/
 linkedin_jobs*.json
 jobs_index.json
 logs/
+
+# output
+linkedin_jobs*.json
+linkedin_debug*.html
+linkedin_scraper.log
+linkedin_scraper_errors.log
