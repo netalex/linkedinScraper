@@ -37,7 +37,7 @@ ENV/
 *.swo
 
 # Project specific
-.env
+# .env
 job_files/
 linkedin_jobs*.json
 jobs_index.json
