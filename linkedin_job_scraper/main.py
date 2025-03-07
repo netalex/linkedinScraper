@@ -5,14 +5,99 @@ Consente l'esecuzione del pacchetto direttamente con python -m linkedin_job_scra
 """
 
 import sys
+import os
 import argparse
-from typing import List
+import json
+from typing import List, Dict, Any, Tuple
+import logging
+
+# Aggiungi la directory principale al path per consentire l'importazione di exporters
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from .config import load_config
 from .cli import configure_argument_parser
 from .scraper import process_search_results, scrape_linkedin_job
 from .utils import build_search_url, setup_logging
-from exporters.json_exporter import save_job_data_to_json, export_individual_job_files, create_jobs_index
+
+# Ora importa da exporters sarà possibile
+try:
+    from exporters.json_exporter import save_job_data_to_json, export_individual_job_files, create_jobs_index
+except ImportError:
+    # Definisci funzioni di fallback in caso exporters non sia disponibile
+    def save_job_data_to_json(job_data, output_file):
+        """Funzione di fallback per salvare i dati dell'offerta in un file JSON."""
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump([job_data], f, indent=2, ensure_ascii=False)
+            logging.info(f"Dati dell'offerta salvati in {output_file}")
+            return True
+        except Exception as e:
+            logging.error(f"Errore nel salvataggio dei dati dell'offerta in {output_file}: {str(e)}")
+            return False
+    
+    def export_individual_job_files(jobs_data, output_dir, enrich=True):
+        """Funzione di fallback per esportare file individuali."""
+        os.makedirs(output_dir, exist_ok=True)
+        exported_files = []
+        for job in jobs_data:
+            job_id = job.get('Detail URL', '').split('/')[-1].split('?')[0]
+            if not job_id:
+                continue
+            
+            company_name = job.get('Company Name', 'Unknown').replace(' ', '_')
+            job_title = job.get('Title', 'Unknown').replace(' ', '_')
+            filename = f"{job_id}_{company_name}_{job_title}.json"[:100]
+            
+            file_path = os.path.join(output_dir, filename)
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(job, f, indent=2, ensure_ascii=False)
+                logging.info(f"Offerta {job_id} esportata in {file_path}")
+                exported_files.append(file_path)
+            except Exception as e:
+                logging.error(f"Errore nell'esportazione dell'offerta {job_id}: {str(e)}")
+        return exported_files
+    
+    def create_jobs_index(jobs_data, output_file):
+        """Funzione di fallback per creare l'indice delle offerte."""
+        index = []
+        for job in jobs_data:
+            job_id = job.get('Detail URL', '').split('/')[-1].split('?')[0]
+            if not job_id:
+                continue
+                
+            index_entry = {
+                "JobId": job_id,
+                "Title": job.get('Title'),
+                "Company": job.get('Company Name'),
+                "Location": job.get('Location'),
+                "RemoteStatus": "Remote" if "remote" in job.get('Location', '').lower() else "Not Specified",
+                "DetailURL": job.get('Detail URL'),
+                "PostedDate": job.get('Created At'),
+                "ScrapedDate": job.get('ScrapedAt'),
+                "Status": "Not Applied",
+                "Priority": "Medium"
+            }
+            
+            # Aggiungi punteggio di rilevanza se disponibile
+            if 'Relevance' in job:
+                index_entry["Relevance"] = job['Relevance'].get('Score', 0)
+            else:
+                index_entry["Relevance"] = 0
+            
+            index.append(index_entry)
+        
+        # Ordina per punteggio di rilevanza (più alto al più basso)
+        index.sort(key=lambda x: x.get('Relevance', 0), reverse=True)
+        
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(index, f, indent=2, ensure_ascii=False)
+            logging.info(f"Indice delle offerte creato in {output_file}")
+            return True
+        except Exception as e:
+            logging.error(f"Errore nella creazione dell'indice delle offerte: {str(e)}")
+            return False
 
 
 def main():
@@ -24,7 +109,7 @@ def main():
     config = load_config()
     
     # Configura logging
-    logger = setup_logging()
+    logger = setup_logging(config.get('LOG_LEVEL', 'INFO'), config.get('LOG_FILE'))
     
     # Configura il parser degli argomenti
     parser = configure_argument_parser(config)

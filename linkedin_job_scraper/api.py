@@ -83,89 +83,102 @@ def extract_job_ids_from_search(search_url: str, max_jobs: int = 100,
         # Analizza l'HTML con BeautifulSoup
         soup = BeautifulSoup(response_text, 'html.parser')
         
-        # Estrai gli ID delle offerte in base al tipo di URL
-        if is_guest_api:
-            # Prova con più selettori per adattarsi ai cambiamenti di LinkedIn
-            job_items = soup.select('li.jobs-search-results__list-item')
-            
-            if not job_items:
-                job_items = soup.select('li')
-            
-            if not job_items:
-                # Prova selettore alternativo per le schede delle offerte
-                job_items = soup.select('div.job-search-card')
-            
-            if not job_items:
-                job_items = soup.select('div.base-card')
-                
-            if not job_items:
-                # Se ancora non troviamo elementi, prova a cercare qualsiasi elemento con attributi correlati alle offerte
-                job_items = soup.select('[data-job-id]') or soup.select('[data-id]') or soup.select('a[href*="/jobs/view/"]')
-                
-            if not job_items:
-                logging.info(f"Nessun elemento offerta trovato nella pagina {page_num}")
-                # Salva la risposta per debug
-                with open(f"linkedin_response_page_{page_num}.html", "w", encoding="utf-8") as f:
-                    f.write(response_text)
-                logging.info(f"Risposta HTML salvata nel file linkedin_response_page_{page_num}.html")
-                break
-                
-            for item in job_items:
-                # Tenta di estrarre l'ID dell'offerta da vari attributi
-                job_id = None
-                
-                # Controlla l'attributo data-id
-                if 'data-id' in item.attrs:
-                    job_id = item['data-id']
-                # Controlla l'attributo data-job-id
-                elif 'data-job-id' in item.attrs:
-                    job_id = item['data-job-id']
-                # Controlla il link dell'offerta
-                else:
-                    job_link = item.select_one('a[href*="/jobs/view/"]')
-                    if job_link and 'href' in job_link.attrs:
-                        job_id = extract_job_id_from_url(job_link['href'])
-                
-                if job_id and job_id not in job_ids:
+        # Aggiunta: Estrai gli ID delle offerte con i nuovi selettori
+        new_job_ids = extract_job_ids_from_html(soup)
+        
+        if new_job_ids:
+            for job_id in new_job_ids:
+                if job_id not in job_ids:
                     job_ids.append(job_id)
                     jobs_found += 1
                     
                     if jobs_found >= max_jobs:
                         break
         else:
-            # Ricerca regolare - estrai gli ID dalle schede delle offerte
-            job_cards = soup.select('div.job-card-container')
-            if not job_cards:
-                job_cards = soup.select('div.base-card')
+            logging.info(f"Nessun ID offerta trovato nella pagina {page_num}, prova con selettori alternativi")
             
-            if not job_cards:
-                logging.info(f"Nessun'altra scheda offerta trovata nella pagina {page_num}")
-                break
+            # Estrai gli ID delle offerte in base al tipo di URL (vecchio metodo come fallback)
+            if is_guest_api:
+                # Prova con più selettori per adattarsi ai cambiamenti di LinkedIn
+                job_items = soup.select('li.jobs-search__results-list')
                 
-            for card in job_cards:
-                # Estrai l'ID dell'offerta dalla scheda
-                job_id = None
+                if not job_items:
+                    job_items = soup.select('li')
                 
-                # Controlla l'attributo data-job-id
-                if 'data-job-id' in card.attrs:
-                    job_id = card['data-job-id']
-                else:
-                    # Cerca il link dell'offerta
-                    job_link = card.select_one('a[href*="/jobs/view/"]')
-                    if job_link and 'href' in job_link.attrs:
-                        job_id = extract_job_id_from_url(job_link['href'])
+                if not job_items:
+                    # Prova selettore alternativo per le schede delle offerte
+                    job_items = soup.select('div.job-search-card')
                 
-                if job_id and job_id not in job_ids:
-                    job_ids.append(job_id)
-                    jobs_found += 1
+                if not job_items:
+                    job_items = soup.select('div.base-card')
                     
-                    if jobs_found >= max_jobs:
-                        break
-        
+                if not job_items:
+                    # Se ancora non troviamo elementi, prova a cercare qualsiasi elemento con attributi correlati alle offerte
+                    job_items = soup.select('[data-job-id]') or soup.select('[data-id]') or soup.select('a[href*="/jobs/view/"]')
+                    
+                if not job_items:
+                    logging.info(f"Nessun elemento offerta trovato nella pagina {page_num}")
+                    # Salva la risposta per debug
+                    with open(f"linkedin_response_page_{page_num}.html", "w", encoding="utf-8") as f:
+                        f.write(response_text)
+                    logging.info(f"Risposta HTML salvata nel file linkedin_response_page_{page_num}.html")
+                    break
+                    
+                for item in job_items:
+                    # Tenta di estrarre l'ID dell'offerta da vari attributi
+                    job_id = None
+                    
+                    # Controlla l'attributo data-id
+                    if 'data-id' in item.attrs:
+                        job_id = item['data-id']
+                    # Controlla l'attributo data-job-id
+                    elif 'data-job-id' in item.attrs:
+                        job_id = item['data-job-id']
+                    # Controlla il link dell'offerta
+                    else:
+                        job_link = item.select_one('a[href*="/jobs/view/"]')
+                        if job_link and 'href' in job_link.attrs:
+                            job_id = extract_job_id_from_url(job_link['href'])
+                    
+                    if job_id and job_id not in job_ids:
+                        job_ids.append(job_id)
+                        jobs_found += 1
+                        
+                        if jobs_found >= max_jobs:
+                            break
+            else:
+                # Ricerca regolare - estrai gli ID dalle schede delle offerte
+                job_cards = soup.select('div.job-card-container')
+                if not job_cards:
+                    job_cards = soup.select('div.base-card')
+                
+                if not job_cards:
+                    logging.info(f"Nessun'altra scheda offerta trovata nella pagina {page_num}")
+                    break
+                    
+                for card in job_cards:
+                    # Estrai l'ID dell'offerta dalla scheda
+                    job_id = None
+                    
+                    # Controlla l'attributo data-job-id
+                    if 'data-job-id' in card.attrs:
+                        job_id = card['data-job-id']
+                    else:
+                        # Cerca il link dell'offerta
+                        job_link = card.select_one('a[href*="/jobs/view/"]')
+                        if job_link and 'href' in job_link.attrs:
+                            job_id = extract_job_id_from_url(job_link['href'])
+                    
+                    if job_id and job_id not in job_ids:
+                        job_ids.append(job_id)
+                        jobs_found += 1
+                        
+                        if jobs_found >= max_jobs:
+                            break
+                            
         # Controlla se abbiamo trovato offerte in questa pagina
-        new_jobs_on_page = len(job_ids) - (jobs_found - len(job_ids))
-        if new_jobs_on_page == 0:
-            logging.info(f"Nessuna nuova offerta trovata nella pagina {page_num}")
+        if len(job_ids) == 0:
+            logging.info(f"Nessuna offerta trovata nella pagina {page_num}")
             break
             
         logging.info(f"Trovati {len(job_ids)} ID offerta finora (pagina {page_num})")
@@ -173,6 +186,57 @@ def extract_job_ids_from_search(search_url: str, max_jobs: int = 100,
         
         # Ritardo casuale prima della prossima richiesta di pagina (più variazione)
         time.sleep(random.uniform(min_delay, max_delay))
+    
+    return job_ids
+
+
+def extract_job_ids_from_html(soup: BeautifulSoup) -> List[str]:
+    """
+    Estrae gli ID delle offerte di lavoro da una pagina di risultati di ricerca di LinkedIn usando nuovi selettori.
+    
+    Args:
+        soup: Oggetto BeautifulSoup della pagina di ricerca
+        
+    Returns:
+        Lista di ID di offerte
+    """
+    job_ids = []
+    
+    # Nuovi selettori (basati su LinkedIn 2024-2025)
+    search_cards = soup.select('div.base-search-card')
+    if search_cards:
+        logging.info(f"Trovati {len(search_cards)} elementi base-search-card")
+        
+        for card in search_cards:
+            # Estrai da 'data-entity-urn'
+            data_entity_urn = card.get('data-entity-urn')
+            if data_entity_urn:
+                match = re.search(r':(\d+)$', data_entity_urn)
+                if match:
+                    job_id = match.group(1)
+                    job_ids.append(job_id)
+                    continue
+                    
+            # Estrai da 'data-tracking-id'
+            data_tracking_id = card.get('data-tracking-id')
+            if data_tracking_id:
+                # Il tracking ID è codificato in base64, ma a volte contiene l'ID dell'offerta
+                # Verifica se c'è un link diretto all'offerta
+                job_link = card.select_one('a[href*="/jobs/view/"]')
+                if job_link and 'href' in job_link.attrs:
+                    job_id = extract_job_id_from_url(job_link['href'])
+                    if job_id:
+                        job_ids.append(job_id)
+                        continue
+            
+            # Cerca il link dell'offerta all'interno della card
+            job_link = card.select_one('a[href*="/jobs/view/"]')
+            if job_link and 'href' in job_link.attrs:
+                job_id = extract_job_id_from_url(job_link['href'])
+                if job_id:
+                    job_ids.append(job_id)
+    else:
+        logging.warning("Nessun elemento base-search-card trovato")
     
     return job_ids
 
