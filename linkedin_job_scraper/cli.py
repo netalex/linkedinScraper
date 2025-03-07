@@ -47,8 +47,9 @@ def configure_argument_parser(config: Dict[str, Any] = None) -> argparse.Argumen
                              help='Filtra per lavori pubblicati nell\'ultima settimana')
     search_group.add_argument('--seniority', choices=['entry', 'associate', 'mid-senior', 'director'],
                              nargs='+', help='Filtra per livello di anzianità')
-    search_group.add_argument('--use-guest-api', action='store_true', default=True,
-                             help='Utilizza l\'API guest di LinkedIn per la ricerca')
+    search_group.add_argument('--use-guest-api', type=lambda x: (str(x).lower() == 'true'), 
+                             default=False,
+                             help='Utilizza l\'API guest di LinkedIn per la ricerca (true/false)')
     
     # Opzioni per i limiti e i ritardi
     limits_group = parser.add_argument_group('Limiti e ritardi')

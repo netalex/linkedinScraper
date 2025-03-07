@@ -71,19 +71,43 @@ def extract_job_ids_from_search(search_url: str, max_jobs: int = 100,
             logging.error(f"Impossibile ottenere la pagina dei risultati {page_num}")
             break
         
+        # Salva la risposta HTML per analizzarla
+        debug_file = f"linkedin_debug_page_{page_num}.html"
+        with open(debug_file, "w", encoding="utf-8") as f:
+            f.write(response_text)
+        logging.info(f"Risposta HTML salvata in {debug_file}")
+        
+        # Aggiungi debug per vedere cosa sta restituendo LinkedIn
+        logging.debug(f"Primi 500 caratteri della risposta: {response_text[:500]}")
+        
         # Analizza l'HTML con BeautifulSoup
         soup = BeautifulSoup(response_text, 'html.parser')
         
         # Estrai gli ID delle offerte in base al tipo di URL
         if is_guest_api:
-            # L'API guest restituisce elementi li con ID delle offerte
-            job_items = soup.select('li')
+            # Prova con più selettori per adattarsi ai cambiamenti di LinkedIn
+            job_items = soup.select('li.jobs-search-results__list-item')
+            
+            if not job_items:
+                job_items = soup.select('li')
+            
             if not job_items:
                 # Prova selettore alternativo per le schede delle offerte
                 job_items = soup.select('div.job-search-card')
+            
+            if not job_items:
+                job_items = soup.select('div.base-card')
                 
             if not job_items:
-                logging.info(f"Nessun altro elemento offerta trovato nella pagina {page_num}")
+                # Se ancora non troviamo elementi, prova a cercare qualsiasi elemento con attributi correlati alle offerte
+                job_items = soup.select('[data-job-id]') or soup.select('[data-id]') or soup.select('a[href*="/jobs/view/"]')
+                
+            if not job_items:
+                logging.info(f"Nessun elemento offerta trovato nella pagina {page_num}")
+                # Salva la risposta per debug
+                with open(f"linkedin_response_page_{page_num}.html", "w", encoding="utf-8") as f:
+                    f.write(response_text)
+                logging.info(f"Risposta HTML salvata nel file linkedin_response_page_{page_num}.html")
                 break
                 
             for item in job_items:
