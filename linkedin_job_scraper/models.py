@@ -113,29 +113,30 @@ def create_empty_job_data() -> Dict[str, Any]:
         Dizionario con tutti i campi richiesti inizializzati a valori vuoti/predefiniti
     """
     return {
-        "Title": None,
-        "Description": None,
-        "Detail URL": None,
-        "Location": None,
-        "Skill": None,
-        "Insight": None,
-        "Job State": "LISTED",  # Valore predefinito
-        "Poster Id": None,
-        "Company Name": None,
-        "Company Logo": None,
-        "Company Apply Url": None,
-        "Company Description": None,
-        "Company Website": None,
-        "Industry": None,
-        "Employee Count": None,
-        "Headquarters": None,
-        "Company Founded": None,
-        "Specialties": None,
-        "Hiring Manager Title": None,
-        "Hiring Manager Subtitle": None,
-        "Hiring Manager Title Insight": None,
-        "Hiring Manager Profile": None,
-        "Hiring Manager Image": None,
+        "Title": "",
+        "Description": "",
+        "Primary Description": "",  # New required field
+        "Detail URL": "",
+        "Location": "",
+        "Skill": None,  # Changed from None to null
+        "Insight": None,  # Changed from None to null
+        "Job State": None,  # Changed from "LISTED" to null
+        "Poster Id": "",
+        "Company Name": "",
+        "Company Logo": None,  # Changed from None to null
+        "Company Apply Url": None,  # Changed from None to null
+        "Company Description": "",
+        "Company Website": None,  # Changed from None to null
+        "Industry": None,  # Changed from None to null
+        "Employee Count": None,  # Already null
+        "Headquarters": "",
+        "Company Founded": None,  # Already null
+        "Specialties": None,  # Changed from string to null
+        "Hiring Manager Title": None,  # Already null
+        "Hiring Manager Subtitle": None,  # Already null
+        "Hiring Manager Title Insight": None,  # Already null
+        "Hiring Manager Profile": None,  # Already null
+        "Hiring Manager Image": None,  # Already null
         "Created At": None,
         "ScrapedAt": None
     }
