@@ -154,6 +154,7 @@ def extract_data_from_html(html_content: str, job_url: str) -> Dict[str, Any]:
     
     # Inizializza con i campi richiesti
     job_data = create_empty_job_data()
+    job_data["Primary Description"] = ""  # Will be generated later
     job_data["Detail URL"] = job_url
     job_data["ScrapedAt"] = datetime.datetime.now().isoformat()
     
@@ -354,17 +355,65 @@ def extract_data_from_html(html_content: str, job_url: str) -> Dict[str, Any]:
                     pass
     
     # Estrai specialties se disponibili
-    specialties_selectors = [
-        'div.specialties',
-        'div.org-add-specialities',
-        '.company-specialties'
-    ]
-    
+    specialties_text = ""
     for selector in specialties_selectors:
         specialties_element = soup.select_one(selector)
         if specialties_element:
-            job_data["Specialties"] = specialties_element.get_text().strip()
+            specialties_text = specialties_element.get_text().strip()
             break
+
+    if specialties_text:
+        # Convert to array by splitting on commas, semicolons, or other delimiters
+        job_data["Specialties"] = [s.strip() for s in re.split(r'[,;]+', specialties_text) if s.strip()]
+    else:
+        job_data["Specialties"] = None
+
+    # Update the Skill extraction:
+    # Skills can be extracted from keywords, tags, or other elements
+    skill_selectors = [
+        'ul.job-details-jobs-unified-top-card__job-insight',
+        '.job-criteria__list',
+        '.skills-section',
+        'section.skills'
+    ]
+
+    skills = []
+    for selector in skill_selectors:
+        skill_elements = soup.select(f"{selector} > li, {selector} span.skill-item")
+        if skill_elements:
+            for element in skill_elements:
+                skill_text = element.get_text().strip()
+                if skill_text and len(skill_text) > 1 and skill_text not in skills:
+                    skills.append(skill_text)
+
+    if skills:
+        job_data["Skill"] = skills
+    else:
+        job_data["Skill"] = None
+
+    # Update the Insight extraction:
+    # Insights can be things like "10 applicants", "Posted 3 days ago", etc.
+    insight_selectors = [
+        '.jobs-unified-top-card__job-insight',
+        '.job-details-jobs-unified-top-card__subtitle-secondary-grouping span',
+        '.job-insight-container'
+    ]
+
+    insights = []
+    for selector in insight_selectors:
+        insight_elements = soup.select(f"{selector} span, {selector} > div")
+        if insight_elements:
+            for element in insight_elements:
+                insight_text = element.get_text().strip()
+                if insight_text and len(insight_text) > 1 and insight_text not in insights:
+                    insights.append(insight_text)
+
+    if insights:
+        job_data["Insight"] = insights
+    else:
+        job_data["Insight"] = None
+
+
     
     # Estrai poster ID se disponibile
     poster_selectors = [
@@ -427,10 +476,10 @@ def extract_data_from_html(html_content: str, job_url: str) -> Dict[str, Any]:
     
     # Imposta lo stato dell'offerta
     job_data["Job State"] = "LISTED"
-    
-    # Imposta i campi null richiesti dallo schema
-    job_data["Skill"] = None
-    job_data["Insight"] = None
+
+    # Generate Primary Description if not already set
+    if not job_data["Primary Description"]:
+        job_data["Primary Description"] = generate_primary_description(job_data)
     
     return job_data
 
@@ -984,13 +1033,8 @@ def clean_and_validate_job_data(job_data: Dict[str, Any]) -> Dict[str, Any]:
     
     if cleaned_data["Specialties"] is None or cleaned_data["Specialties"] == "":
         cleaned_data["Specialties"] = "Non specificato"
-    # Ensure null fields are properly null
-    cleaned_data["Skill"] = None
-    cleaned_data["Insight"] = None
-    cleaned_data["Hiring Manager Title"] = None
-    cleaned_data["Hiring Manager Subtitle"] = None
-    cleaned_data["Hiring Manager Title Insight"] = None
-    cleaned_data["Hiring Manager Profile"] = None
+
+
 
     cleaned_data["Hiring Manager Image"] = None
 
