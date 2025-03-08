@@ -87,6 +87,28 @@ Lo schema JSON utilizzato è compatibile con molti sistemi di tracciamento delle
 - Stato della candidatura
 - Punteggio di rilevanza basato su parole chiave
 
+## Documentazione
+
+- [Guida all'aggiornamento dello schema](./SCHEMA_UPDATE_GUIDE.md) - Informazioni sull'aggiornamento allo schema più recente e su come utilizzarlo.
+
+
+## Testing
+
+The LinkedIn Job Scraper includes a comprehensive test suite to ensure proper schema validation and data handling.
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run specific schema validation tests
+pytest linkedin_job_scraper/tests/test_models.py -v
+```
+
+See the [Schema Update Guide](./SCHEMA_UPDATE_GUIDE.md#testing-the-schema-implementation) for more details on testing and validation.
+
+
 ## 🛡️ Considerazioni etiche e legali
 
 Questo tool è progettato per automatizzare la ricerca di lavoro personale, non per raccolta massiva di dati. Si prega di:
