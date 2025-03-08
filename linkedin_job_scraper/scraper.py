@@ -602,7 +602,15 @@ def process_search_results(search_url: str, output_file: str, max_jobs: int = 10
     
     # Scraping di ogni offerta
     all_jobs_data = []
-    for i, job_id in enumerate(job_ids):
+    
+    try:
+        from tqdm import tqdm
+        job_ids_iter = tqdm(job_ids, desc="Scraping offerte di lavoro")
+    except ImportError:
+        logging.warning("Package tqdm non installato. Nessuna progress bar disponibile.")
+        job_ids_iter = job_ids
+    
+    for i, job_id in enumerate(job_ids_iter):
         job_url = f"https://www.linkedin.com/jobs/view/{job_id}/"
         logging.info(f"Elaborazione offerta {i+1}/{len(job_ids)}: {job_url}")
         
@@ -630,3 +638,36 @@ def process_search_results(search_url: str, output_file: str, max_jobs: int = 10
     except Exception as e:
         logging.error(f"Errore nel salvataggio dei dati delle offerte nel file: {str(e)}")
         return False, all_jobs_data
+
+
+def cleanup_debug_files(keep_last_n: int = 5) -> None:
+    """
+    Pulisce i file HTML di debug, mantenendo solo gli ultimi N.
+    
+    Args:
+        keep_last_n: Numero di file da mantenere
+    """
+    import os
+    import glob
+    import re
+    
+    try:
+        # Trova tutti i file di debug
+        debug_files = glob.glob("linkedin_debug_page_*.html")
+        
+        # Ordina per numero di pagina
+        debug_files.sort(key=lambda f: int(re.search(r'page_(\d+)\.html', f).group(1)))
+        
+        # Mantieni solo gli ultimi N
+        files_to_delete = debug_files[:-keep_last_n] if keep_last_n > 0 else debug_files
+        
+        # Elimina i file
+        for file_path in files_to_delete:
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                logging.warning(f"Impossibile eliminare {file_path}: {e}")
+        
+        logging.info(f"Eliminati {len(files_to_delete)} file HTML di debug")
+    except Exception as e:
+        logging.warning(f"Errore durante la pulizia dei file di debug: {e}")

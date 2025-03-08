@@ -35,7 +35,8 @@ DEFAULT_CONFIG = {
     "USE_PROXY": False,
     "PROXY_URL": None,
     "LOG_LEVEL": "INFO",
-    "LOG_FILE": None
+    "LOG_FILE": None,
+    "MAX_EMPTY_PAGES": 3,
 }
 
 

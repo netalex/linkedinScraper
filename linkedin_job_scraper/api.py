@@ -33,6 +33,8 @@ def extract_job_ids_from_search(search_url: str, max_jobs: int = 100,
     job_ids = []
     page_num = 0
     jobs_found = 0
+    consecutive_empty_pages = 0  # Conta pagine consecutive senza nuovi ID
+    max_empty_pages = 3  # Numero massimo di pagine vuote prima di fermarsi
     
     logging.info(f"Estrazione degli ID delle offerte dalla ricerca: {search_url}")
     
@@ -40,6 +42,11 @@ def extract_job_ids_from_search(search_url: str, max_jobs: int = 100,
     is_guest_api = "jobs-guest/jobs/api" in search_url
     
     while jobs_found < max_jobs:
+        # Se abbiamo troppe pagine vuote consecutive, interrompi il ciclo
+        if consecutive_empty_pages >= max_empty_pages:
+            logging.info(f"Raggiunte {consecutive_empty_pages} pagine consecutive senza nuovi ID. Terminazione.")
+            break
+            
         # Regola il parametro di paginazione in base al tipo di URL
         if is_guest_api:
             # L'API guest utilizza il parametro pageNum
@@ -69,9 +76,11 @@ def extract_job_ids_from_search(search_url: str, max_jobs: int = 100,
         
         if not response_text:
             logging.error(f"Impossibile ottenere la pagina dei risultati {page_num}")
-            break
+            consecutive_empty_pages += 1
+            page_num += 1
+            continue
         
-        # Salva la risposta HTML per analizzarla
+        # Salva la risposta HTML (puoi commentare questo per evitare di salvare troppe pagine)
         debug_file = f"linkedin_debug_page_{page_num}.html"
         with open(debug_file, "w", encoding="utf-8") as f:
             f.write(response_text)
@@ -83,19 +92,30 @@ def extract_job_ids_from_search(search_url: str, max_jobs: int = 100,
         # Analizza l'HTML con BeautifulSoup
         soup = BeautifulSoup(response_text, 'html.parser')
         
-        # Aggiunta: Estrai gli ID delle offerte con i nuovi selettori
+        # Estrai gli ID delle offerte con i nuovi selettori
         new_job_ids = extract_job_ids_from_html(soup)
+        
+        # Contatore per i nuovi ID trovati in questa pagina
+        new_ids_found = 0
         
         if new_job_ids:
             for job_id in new_job_ids:
                 if job_id not in job_ids:
                     job_ids.append(job_id)
                     jobs_found += 1
+                    new_ids_found += 1
                     
                     if jobs_found >= max_jobs:
                         break
+        
+        # Verifica se abbiamo trovato nuovi ID in questa pagina
+        if new_ids_found == 0:
+            consecutive_empty_pages += 1
+            logging.info(f"Nessun nuovo ID trovato nella pagina {page_num}, counter: {consecutive_empty_pages}/{max_empty_pages}")
         else:
-            logging.info(f"Nessun ID offerta trovato nella pagina {page_num}, prova con selettori alternativi")
+            # Reset del contatore se abbiamo trovato nuovi ID
+            consecutive_empty_pages = 0
+            logging.info(f"Trovati {new_ids_found} nuovi ID nella pagina {page_num}")
             
             # Estrai gli ID delle offerte in base al tipo di URL (vecchio metodo come fallback)
             if is_guest_api:
@@ -175,17 +195,20 @@ def extract_job_ids_from_search(search_url: str, max_jobs: int = 100,
                         
                         if jobs_found >= max_jobs:
                             break
-                            
+        
         # Controlla se abbiamo trovato offerte in questa pagina
-        if len(job_ids) == 0:
-            logging.info(f"Nessuna offerta trovata nella pagina {page_num}")
-            break
-            
-        logging.info(f"Trovati {len(job_ids)} ID offerta finora (pagina {page_num})")
+        logging.info(f"Trovati {len(job_ids)} ID offerta finora (pagina {page_num}), nuovi in questa pagina: {new_ids_found}")
         page_num += 1
         
-        # Ritardo casuale prima della prossima richiesta di pagina (più variazione)
+        # Controlla esplicitamente la condizione di terminazione
+        if consecutive_empty_pages >= max_empty_pages:
+            logging.info(f"Raggiunte {consecutive_empty_pages} pagine consecutive senza nuovi ID. Terminazione.")
+            break
+            
+        # Ritardo casuale prima della prossima richiesta di pagina
         time.sleep(random.uniform(min_delay, max_delay))
+    
+    logging.info(f"Completata estrazione degli ID delle offerte. Trovati {len(job_ids)} ID unici.")
     
     return job_ids
 

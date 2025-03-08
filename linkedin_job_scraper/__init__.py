@@ -20,4 +20,5 @@ __all__ = [
     'validate_job_data',
     'SCHEMA',
     'build_search_url',
+    'cleanup_debug_files'
 ]

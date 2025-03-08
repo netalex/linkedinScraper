@@ -53,7 +53,7 @@ def configure_argument_parser(config: Dict[str, Any] = None) -> argparse.Argumen
     
     # Opzioni per i limiti e i ritardi
     limits_group = parser.add_argument_group('Limiti e ritardi')
-    limits_group.add_argument('--max-jobs', '-m', type=int, default=config.get('MAX_JOBS_TO_SCRAPE', 100),
+    limits_group.add_argument('--max-jobs', '-m', type=int, default=config.get('MAX_JOBS_TO_SCRAPE', 25),
                              help='Numero massimo di offerte di lavoro da scrapare')
     limits_group.add_argument('--min-delay', type=float, default=config.get('MIN_DELAY', 2),
                              help='Ritardo minimo tra le richieste (secondi)')

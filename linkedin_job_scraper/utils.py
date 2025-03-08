@@ -280,3 +280,4 @@ def get_timestamp() -> str:
         Timestamp formattato
     """
     return datetime.now().strftime("%Y%m%d_%H%M%S")
+
