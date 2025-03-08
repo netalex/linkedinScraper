@@ -36,12 +36,17 @@ def extract_data_from_html(html_content: str, job_url: str) -> Dict[str, Any]:
     job_data["Detail URL"] = job_url
     job_data["ScrapedAt"] = datetime.datetime.now().isoformat()
     
-    # Estrai il titolo dell'offerta (utilizzo di selettori multipli per maggiore robustezza)
+    # Estrai il titolo dell'offerta
     title_selectors = [
         'h1.top-card-layout__title',
         'h1.job-details-jobs-unified-top-card__job-title',
         'h1.topcard__title',
-        'h1.jobs-unified-top-card__job-title'
+        'h1.jobs-unified-top-card__job-title',
+        'h1[data-test-job-title]',
+        'h1.job-title',
+        '.job-view-layout h1',
+        '.jobs-unified-top-card__content h1',
+        'h1.artdeco-entity-lockup__title'
     ]
     
     for selector in title_selectors:
@@ -49,232 +54,19 @@ def extract_data_from_html(html_content: str, job_url: str) -> Dict[str, Any]:
         if title_element:
             job_data["Title"] = title_element.get_text().strip()
             break
-    
-    # Estrai la descrizione dell'offerta (selettori multipli)
-    description_selectors = [
-        'div.description__text',
-        'div.show-more-less-html__markup',
-        'div.jobs-description-content__text',
-        'div.job-details-jobs-unified-description__container'
-    ]
-    
-    for selector in description_selectors:
-        description_element = soup.select_one(selector)
-        if description_element:
-            job_data["Description"] = description_element.get_text().strip()
-            break
-    
-    # Estrai la posizione (selettori multipli)
-    location_selectors = [
-        'span.topcard__flavor--bullet',
-        'span.job-details-jobs-unified-top-card__bullet',
-        'span.jobs-unified-top-card__bullet',
-        'span.jobs-unified-top-card__workplace-type'
-    ]
-    
-    for selector in location_selectors:
-        location_element = soup.select_one(selector)
-        if location_element:
-            job_data["Location"] = location_element.get_text().strip()
-            break
-    
-    # Controlla anche nel testo della posizione per "Remote" o simili
-    if job_data["Location"] and ("remote" in job_data["Location"].lower() or "remoto" in job_data["Location"].lower()):
-        if not "Remote" in job_data["Location"]:
-            job_data["Location"] = f"{job_data['Location']} (Remote)"
-    
-    # Estrai il nome dell'azienda (selettori multipli)
-    company_name_selectors = [
-        'a.topcard__org-name-link',
-        'a.job-details-jobs-unified-top-card__company-name',
-        'a.jobs-unified-top-card__company-name',
-        'span.topcard__org-name-link',
-        'span.job-details-jobs-unified-top-card__company-name'
-    ]
-    
-    for selector in company_name_selectors:
-        company_name_element = soup.select_one(selector)
-        if company_name_element:
-            job_data["Company Name"] = company_name_element.get_text().strip()
-            break
-    
-    # Estrai il logo dell'azienda (selettori multipli)
-    logo_selectors = [
-        'img.artdeco-entity-image',
-        'img.job-details-jobs-unified-top-card__company-logo',
-        'img.jobs-unified-top-card__company-logo',
-        'img.topcard__org-logo-img'
-    ]
-    
-    for selector in logo_selectors:
-        logo_element = soup.select_one(selector)
-        if logo_element and 'src' in logo_element.attrs:
-            job_data["Company Logo"] = logo_element['src']
-            break
-    
-    # Estrai l'URL per la candidatura
-    apply_button_selectors = [
-        'a.apply-button',
-        'a.jobs-apply-button',
-        'a[data-tracking-control-name="public_jobs_apply-link-offsite_sign-up"]',
-        'a.job-details-jobs-unified-top-card__apply-button'
-    ]
-    
-    for selector in apply_button_selectors:
-        apply_button = soup.select_one(selector)
-        if apply_button and 'href' in apply_button.attrs:
-            job_data["Company Apply Url"] = apply_button['href']
-            break
-    
-    # Se non troviamo un URL di candidatura, costruisci l'URL standard di LinkedIn
-    if not job_data["Company Apply Url"]:
-        job_id = extract_job_id_from_url(job_url)
-        if job_id:
-            job_data["Company Apply Url"] = f"https://www.linkedin.com/job-apply/{job_id}/"
-        else:
-            job_data["Company Apply Url"] = job_url
-    
-    # Estrai la descrizione dell'azienda
-    company_description_selectors = [
-        'div.company-description',
-        'div.jobs-company__box',
-        'p.job-details-jobs-unified-top-card__company-description',
-        'div.jobs-company-details'
-    ]
-    
-    for selector in company_description_selectors:
-        company_about = soup.select_one(selector)
-        if company_about:
-            job_data["Company Description"] = company_about.get_text().strip()
-            break
-    
-    # Estrai il sito web dell'azienda
-    website_selectors = [
-        'a[href*="://"].link-without-visited-state',
-        'a.jobs-company__link',
-        'a[data-tracking-control-name="public_jobs_topcard-company-url"]'
-    ]
-    
-    for selector in website_selectors:
-        company_website_element = soup.select_one(selector)
-        if company_website_element and 'href' in company_website_element.attrs:
-            url = company_website_element['href']
-            # Verifica che sia un URL valido e non un percorso interno LinkedIn
-            if url.startswith('http') and 'linkedin.com' not in url:
-                job_data["Company Website"] = url
-                break
-    
-    # Estrai dettagli dell'azienda
-    company_details_selectors = [
-        'dd.top-card-layout__card-elements',
-        'dd.jobs-company__card-elements',
-        'span.jobs-company__secondary-information',
-        'div.job-details-jobs-unified-top-card__primary-description'
-    ]
-    
-    all_details = []
-    for selector in company_details_selectors:
-        all_details.extend(soup.select(selector))
-    
-    if all_details:
-        for detail in all_details:
-            text = detail.get_text().strip()
-            # Estrai numero di dipendenti
-            if "employees" in text.lower() or "dipendenti" in text.lower():
-                numbers = re.findall(r'\d+[\s,\.]*\d*', text.replace(',', ''))
-                if numbers:
-                    try:
-                        # Se è un range (es. "1,000-5,000"), calcola la media
-                        if len(numbers) >= 2:
-                            num1 = int(re.sub(r'[^\d]', '', numbers[0]))
-                            num2 = int(re.sub(r'[^\d]', '', numbers[1]))
-                            job_data["Employee Count"] = (num1 + num2) // 2
-                        else:
-                            job_data["Employee Count"] = int(re.sub(r'[^\d]', '', numbers[0]))
-                    except (ValueError, TypeError):
-                        pass
-            
-            # Estrai sede centrale
-            if "headquarters" in text.lower() or "sede" in text.lower():
-                headquarters = re.sub(r'headquarters:?\s*|sede:?\s*', '', text, flags=re.IGNORECASE).strip()
-                if headquarters:
-                    job_data["Headquarters"] = headquarters
-            
-            # Estrai settore
-            if "industry" in text.lower() or "settore" in text.lower():
-                industry = re.sub(r'industry:?\s*|settore:?\s*', '', text, flags=re.IGNORECASE).strip()
-                if industry:
-                    job_data["Industry"] = industry
-            
-            # Estrai anno di fondazione
-            if "founded" in text.lower() or "fondata" in text.lower():
-                year_match = re.search(r'\b(19|20)\d{2}\b', text)
-                if year_match:
-                    try:
-                        job_data["Company Founded"] = int(year_match.group(0))
-                    except ValueError:
-                        pass
-    
-    # Estrai specializzazioni (selettori multipli)
-    specialties_selectors = [
-        'div.specialties',
-        'ul.jobs-company__specialties',
-        'ul.job-details-jobs-unified-top-card__specialties'
-    ]
-    
-    for selector in specialties_selectors:
-        specialties_element = soup.select_one(selector)
-        if specialties_element:
-            spec_text = specialties_element.get_text().strip()
-            # Pulisci il testo da eventuali prefissi
-            spec_text = re.sub(r'specialties:?\s*|specializzazioni:?\s*', '', spec_text, flags=re.IGNORECASE)
-            job_data["Specialties"] = spec_text
-            break
-    
-    # Estrai Poster ID (con vari metodi)
-    poster_selectors = [
-        '[data-poster-id]',
-        '[data-job-poster-id]',
-        '[data-company-id]',
-        '[data-entity-urn]'
-    ]
-    
-    for selector in poster_selectors:
-        poster_element = soup.select_one(selector)
-        if poster_element:
-            for attr in ['data-poster-id', 'data-job-poster-id', 'data-company-id']:
-                if attr in poster_element.attrs:
-                    job_data["Poster Id"] = poster_element[attr]
-                    break
-            
-            # Se non è stato trovato in attributi diretti, cerca in data-entity-urn
-            if not job_data["Poster Id"] and 'data-entity-urn' in poster_element.attrs:
-                urn_match = re.search(r':(\d+)$', poster_element['data-entity-urn'])
-                if urn_match:
-                    job_data["Poster Id"] = urn_match.group(1)
-    
-    # Se ancora non è stato trovato, genera un ID basato sul nome dell'azienda
-    if not job_data["Poster Id"] and job_data["Company Name"]:
-        job_data["Poster Id"] = str(abs(hash(job_data["Company Name"])) % 10000000)
-    
-    # Estrai la data di pubblicazione (selettori multipli)
-    date_selectors = [
-        'span.posted-date',
-        'span.topcard__flavor--metadata',
-        'span.job-details-jobs-unified-top-card__posted-date',
-        'time.job-details-jobs-unified-top-card__posted-date',
-        'span.jobs-unified-top-card__posted-date'
-    ]
-    
-    for selector in date_selectors:
-        date_element = soup.select_one(selector)
-        if date_element:
-            posted_text = date_element.get_text().strip()
-            created_at = parse_posted_date(posted_text)
-            if created_at:
-                job_data["Created At"] = created_at
-                break
-    
+
+    # Add fallback for title
+    if not job_data["Title"] or job_data["Title"] == "Offerta senza titolo":
+        meta_title = soup.select_one('meta[property="og:title"]')
+        if meta_title and 'content' in meta_title.attrs:
+            title_content = meta_title['content']
+            if " | LinkedIn" in title_content:
+                job_data["Title"] = title_content.split(" | LinkedIn")[0].strip()
+            else:
+                job_data["Title"] = title_content.strip()
+
+    # ...existing code for other fields...
+
     # Verifica se la pagina contiene informazioni del hiring manager
     hiring_manager_selectors = [
         '.hiring-manager',
@@ -294,7 +86,6 @@ def extract_data_from_html(html_content: str, job_url: str) -> Dict[str, Any]:
             break
     
     return job_data
-
 
 def parse_posted_date(posted_text: str) -> Optional[str]:
     """
