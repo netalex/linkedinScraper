@@ -162,7 +162,7 @@ def enrich_job_data_for_application(job_data: Dict[str, Any]) -> Dict[str, Any]:
         "Interview Date": None,
         "Offer Date": None,
         "Rejection Date": None,
-        "Notes": "",
+        "Notes": None,
         "Follow Up Date": None,
         "Cover Letter": None,
         "Salary Range": None,
@@ -172,23 +172,29 @@ def enrich_job_data_for_application(job_data: Dict[str, Any]) -> Dict[str, Any]:
         "Interest Level": "Medium"
     }
     
-    # Aggiungi punteggio di rilevanza basato su parole chiave nel titolo e nella descrizione
-    keywords = ["angular", "typescript", "frontend", "front-end", "front end", "javascript"]
+    # Calculate relevance score based on keywords in title and description
+    keywords = ["angular", "typescript", "frontend", "front-end", "front end", "javascript", "react"]
     score = 0
     
     title = enriched_data.get("Title", "").lower()
     description = enriched_data.get("Description", "").lower()
     
+    matched_keywords = []
     for keyword in keywords:
         if keyword in title:
-            score += 3  # Peso maggiore per le parole chiave nel titolo
-        if keyword in description:
+            score += 3  # Higher weight for keywords in title
+            matched_keywords.append(keyword)
+        elif keyword in description:
             score += 1
+            if keyword not in matched_keywords:
+                matched_keywords.append(keyword)
     
+    # Add relevance data
     enriched_data["Relevance"] = {
         "Score": score,
-        "Keywords": keywords,
+        "Keywords": matched_keywords,
         "Angular Mentioned": "angular" in title.lower() or "angular" in description.lower(),
+        "React Mentioned": "react" in title.lower() or "react" in description.lower(),
         "TypeScript Mentioned": "typescript" in title.lower() or "typescript" in description.lower()
     }
     
