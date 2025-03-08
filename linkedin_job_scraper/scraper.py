@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 
 from .utils import extract_job_id_from_url, make_request_with_backoff, get_request_headers
 from .api import try_api_endpoint, extract_job_ids_from_search
-from .models import validate_job_data, create_empty_job_data, enrich_job_data_for_application
+from .models import SCHEMA, validate_job_data, create_empty_job_data, enrich_job_data_for_application
 
 
 # Debug utility function
@@ -995,6 +995,9 @@ def clean_and_validate_job_data(job_data: Dict[str, Any]) -> Dict[str, Any]:
     cleaned_data["Hiring Manager Image"] = None
 
     # Assicurati che Employee Count sia un intero
+    if cleaned_data["Employee Count"] is None:
+        cleaned_data["Employee Count"] = 0 
+
     if cleaned_data["Employee Count"] is not None:
         try:
             cleaned_data["Employee Count"] = int(cleaned_data["Employee Count"])

@@ -50,3 +50,4 @@ linkedin_jobs*.json
 linkedin_debug*.html
 linkedin_scraper.log
 linkedin_scraper_errors.log
+exporters/Jobs_*.json
