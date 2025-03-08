@@ -18,37 +18,35 @@ SCHEMA = {
             "properties": {
                 "Title": {"type": "string"},
                 "Description": {"type": "string"},
+                "Primary Description": {"type": "string"},
                 "Detail URL": {"type": "string"},
                 "Location": {"type": "string"},
-                "Skill": {"type": "null"},
-                "Insight": {"type": "null"},
-                "Job State": {"type": "string"},
+                "Skill": {"type": ["array", "null"]},
+                "Insight": {"type": ["array", "null"]},
+                "Job State": {"type": ["string", "null"]},
                 "Poster Id": {"type": "string"},
                 "Company Name": {"type": "string"},
-                "Company Logo": {"type": "string"},
-                "Company Apply Url": {"type": "string"},
+                "Company Logo": {"type": ["string", "null"]},
+                "Company Apply Url": {"type": ["string", "null"]},
                 "Company Description": {"type": "string"},
-                "Company Website": {"type": "string"},
-                "Industry": {"type": "string"},
-                "Employee Count": {"type": "integer"},
+                "Company Website": {"type": ["string", "null"]},
+                "Industry": {"type": ["string", "null"]},
+                "Employee Count": {"type": ["integer", "null"]},
                 "Headquarters": {"type": "string"},
-                "Company Founded": {"type": "integer"},
-                "Specialties": {"type": "string"},
-                "Hiring Manager Title": {"type": "null"},
-                "Hiring Manager Subtitle": {"type": "null"},
-                "Hiring Manager Title Insight": {"type": "null"},
-                "Hiring Manager Profile": {"type": "null"},
-                "Hiring Manager Image": {"type": "null"},
+                "Company Founded": {"type": ["integer", "null"]},
+                "Specialties": {"type": ["array", "null"]},
+                "Hiring Manager Title": {"type": ["string", "null"]},
+                "Hiring Manager Subtitle": {"type": ["string", "null"]},
+                "Hiring Manager Title Insight": {"type": ["string", "null"]},
+                "Hiring Manager Profile": {"type": ["string", "null"]},
+                "Hiring Manager Image": {"type": ["string", "null"]},
                 "Created At": {"type": "string"},
                 "ScrapedAt": {"type": "string"}
             },
             "required": [
-                "Title", "Description", "Detail URL", "Location", "Skill", "Insight",
-                "Job State", "Poster Id", "Company Name", "Company Logo", "Company Apply Url",
-                "Company Description", "Company Website", "Industry", "Employee Count",
-                "Headquarters", "Company Founded", "Specialties", "Hiring Manager Title",
-                "Hiring Manager Subtitle", "Hiring Manager Title Insight", "Hiring Manager Profile",
-                "Hiring Manager Image", "Created At", "ScrapedAt"
+                "Title", "Description", "Primary Description", "Detail URL", "Location",
+                "Poster Id", "Company Name", "Company Description", "Headquarters",
+                "Created At", "ScrapedAt"
             ]
         }
     ]
@@ -58,20 +56,20 @@ SCHEMA = {
 APPLICATION_SCHEMA = {
     "type": "object",
     "properties": {
-        "Status": {"type": "string"},
-        "Applied Date": {"type": ["string", "null"]},
-        "Response Date": {"type": ["string", "null"]},
-        "Interview Date": {"type": ["string", "null"]},
-        "Offer Date": {"type": ["string", "null"]},
-        "Rejection Date": {"type": ["string", "null"]},
-        "Notes": {"type": "string"},
-        "Follow Up Date": {"type": ["string", "null"]},
+        "Status": {"type": ["string", "null"]},
+        "Applied Date": {"type": ["string", "null"], "format": "date-time"},
+        "Response Date": {"type": ["string", "null"], "format": "date-time"},
+        "Interview Date": {"type": ["string", "null"], "format": "date-time"},
+        "Offer Date": {"type": ["string", "null"], "format": "date-time"},
+        "Rejection Date": {"type": ["string", "null"], "format": "date-time"},
+        "Notes": {"type": ["string", "null"]},
+        "Follow Up Date": {"type": ["string", "null"], "format": "date-time"},
         "Cover Letter": {"type": ["string", "null"]},
         "Salary Range": {"type": ["string", "null"]},
         "Skills Match": {"type": ["integer", "null"]},
         "Location Match": {"type": ["string", "null"]},
-        "Priority": {"type": "string"},
-        "Interest Level": {"type": "string"}
+        "Priority": {"type": ["string", "null"]},
+        "Interest Level": {"type": ["string", "null"]}
     }
 }
 
@@ -79,10 +77,11 @@ APPLICATION_SCHEMA = {
 RELEVANCE_SCHEMA = {
     "type": "object",
     "properties": {
-        "Score": {"type": "integer"},
-        "Keywords": {"type": "array", "items": {"type": "string"}},
-        "Angular Mentioned": {"type": "boolean"},
-        "TypeScript Mentioned": {"type": "boolean"}
+        "Score": {"type": ["integer", "null"]},
+        "Keywords": {"type": ["array", "null"], "items": {"type": "string"}},
+        "Angular Mentioned": {"type": ["boolean", "null"]},
+        "React Mentioned": {"type": ["boolean", "null"]},
+        "TypeScript Mentioned": {"type": ["boolean", "null"]}
     }
 }
 
