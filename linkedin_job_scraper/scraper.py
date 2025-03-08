@@ -907,8 +907,20 @@ def scrape_linkedin_job(job_url: str, min_delay: int = 1, max_delay: int = 3,
         job_data = clean_and_validate_job_data(job_data)
         
         if not validate_job_data(job_data):
+            # Print the job data to see what's wrong
+            logging.debug(f"Job data after cleaning: {json.dumps(job_data, indent=2, default=str)}")
+            
+            # Try to validate manually to see which fields are causing issues
+            try:
+                from jsonschema import validate
+                validate([job_data], SCHEMA)
+            except Exception as e:
+                logging.error(f"Validation error details: {str(e)}")
+            
             logging.error("Impossibile validare i dati dell'offerta anche dopo la pulizia")
     
+
+
     # Arricchisci con campi per il tracciamento delle candidature se necessario
     job_data = enrich_job_data_for_application(job_data)
     
@@ -927,49 +939,61 @@ def clean_and_validate_job_data(job_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     cleaned_data = job_data.copy()
     
-    # Imposta valori predefiniti per i campi obbligatori che potrebbero mancare
-    if cleaned_data["Title"] is None:
+    # Ensure all required fields are present with proper default values
+    if cleaned_data["Title"] is None or cleaned_data["Title"] == "":
         cleaned_data["Title"] = "Offerta senza titolo"
     
-    if cleaned_data["Description"] is None:
+    if cleaned_data["Description"] is None or cleaned_data["Description"] == "":
         cleaned_data["Description"] = "Nessuna descrizione disponibile"
     
-    if cleaned_data["Location"] is None:
+    if cleaned_data["Location"] is None or cleaned_data["Location"] == "":
         cleaned_data["Location"] = "Remote"
     
-    if cleaned_data["Company Name"] is None:
-        cleaned_data["Company Name"] = "Azienda sconosciuta"
+    if cleaned_data["Job State"] is None or cleaned_data["Job State"] == "":
+        cleaned_data["Job State"] = "LISTED"
     
-    if cleaned_data["Industry"] is None:
-        cleaned_data["Industry"] = "Information Technology"
-    
-    if cleaned_data["Headquarters"] is None:
+    if cleaned_data["Headquarters"] is None or cleaned_data["Headquarters"] == "":
         cleaned_data["Headquarters"] = "Sconosciuta"
     
-    if cleaned_data["Specialties"] is None:
+    if cleaned_data["Specialties"] is None or cleaned_data["Specialties"] == "":
         cleaned_data["Specialties"] = "Non specificato"
     
-    if cleaned_data["Poster Id"] is None:
+    if cleaned_data["Poster Id"] is None or cleaned_data["Poster Id"] == "":
         cleaned_data["Poster Id"] = "000000"
     
-    if cleaned_data["Company Logo"] is None:
+    if cleaned_data["Company Name"] is None or cleaned_data["Company Name"] == "":
+        cleaned_data["Company Name"] = "Azienda sconosciuta"
+    
+    if cleaned_data["Company Logo"] is None or cleaned_data["Company Logo"] == "":
         cleaned_data["Company Logo"] = "https://static.licdn.com/aero-v1/sc/h/dbvmk0tsk0o0hd59fi64z3own"
     
-    if cleaned_data["Company Apply Url"] is None:
+    if cleaned_data["Company Apply Url"] is None or cleaned_data["Company Apply Url"] == "":
         cleaned_data["Company Apply Url"] = cleaned_data["Detail URL"]
     
-    if cleaned_data["Company Website"] is None:
+    if cleaned_data["Company Website"] is None or cleaned_data["Company Website"] == "":
         cleaned_data["Company Website"] = "https://www.linkedin.com/"
     
-    if cleaned_data["Company Description"] is None:
+    if cleaned_data["Company Description"] is None or cleaned_data["Company Description"] == "":
         cleaned_data["Company Description"] = "Nessuna descrizione dell'azienda disponibile"
     
-    # Assicurati che Created At sia una stringa di data in formato ISO valida
-    if cleaned_data["Created At"] is None:
-        # Se non abbiamo una data di creazione, usa 30 giorni fa come predefinito
-        thirty_days_ago = datetime.datetime.now() - datetime.timedelta(days=30)
-        cleaned_data["Created At"] = thirty_days_ago.isoformat()
+    if cleaned_data["Industry"] is None or cleaned_data["Industry"] == "":
+        cleaned_data["Industry"] = "Information Technology"
     
+    if cleaned_data["Headquarters"] is None or cleaned_data["Headquarters"] == "":
+        cleaned_data["Headquarters"] = "Sconosciuta"
+    
+    if cleaned_data["Specialties"] is None or cleaned_data["Specialties"] == "":
+        cleaned_data["Specialties"] = "Non specificato"
+    # Ensure null fields are properly null
+    cleaned_data["Skill"] = None
+    cleaned_data["Insight"] = None
+    cleaned_data["Hiring Manager Title"] = None
+    cleaned_data["Hiring Manager Subtitle"] = None
+    cleaned_data["Hiring Manager Title Insight"] = None
+    cleaned_data["Hiring Manager Profile"] = None
+
+    cleaned_data["Hiring Manager Image"] = None
+
     # Assicurati che Employee Count sia un intero
     if cleaned_data["Employee Count"] is not None:
         try:
@@ -983,7 +1007,17 @@ def clean_and_validate_job_data(job_data: Dict[str, Any]) -> Dict[str, Any]:
             cleaned_data["Company Founded"] = int(cleaned_data["Company Founded"])
         except (ValueError, TypeError):
             cleaned_data["Company Founded"] = None
+
+    # Assicurati che Created At sia una stringa di data in formato ISO valida
+    if cleaned_data["Created At"] is None:
+        # Se non abbiamo una data di creazione, usa 30 giorni fa come predefinito
+        thirty_days_ago = datetime.datetime.now() - datetime.timedelta(days=30)
+        cleaned_data["Created At"] = thirty_days_ago.isoformat()
     
+    # Ensure ScrapedAt is set
+    if cleaned_data["ScrapedAt"] is None or cleaned_data["ScrapedAt"] == "":
+        cleaned_data["ScrapedAt"] = datetime.datetime.now().isoformat()
+
     return cleaned_data
 
 
