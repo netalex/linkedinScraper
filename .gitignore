@@ -52,3 +52,4 @@ linkedin_scraper.log
 linkedin_scraper_errors.log
 exporters/Jobs_*.json
 linkedin_jobs.json
+debug_html/
