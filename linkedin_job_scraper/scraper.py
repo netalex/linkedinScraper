@@ -9,6 +9,7 @@ import time
 import random
 import logging
 import json
+import os
 from typing import Dict, Any, List, Optional, Tuple, Union
 
 from bs4 import BeautifulSoup
@@ -16,6 +17,121 @@ from bs4 import BeautifulSoup
 from .utils import extract_job_id_from_url, make_request_with_backoff, get_request_headers
 from .api import try_api_endpoint, extract_job_ids_from_search
 from .models import validate_job_data, create_empty_job_data, enrich_job_data_for_application
+
+
+# Debug utility function
+def save_debug_html(html_content, job_id):
+    """Save HTML content for debugging purposes."""
+    try:
+        debug_dir = "debug_html"
+        os.makedirs(debug_dir, exist_ok=True)
+        with open(f"{debug_dir}/job_{job_id}.html", "w", encoding="utf-8") as f:
+            f.write(html_content)
+        logging.info(f"Saved debug HTML for job {job_id}")
+    except Exception as e:
+        logging.error(f"Failed to save debug HTML: {e}")
+
+
+def clean_description_text(text):
+    """Clean and format job description text."""
+    if not text:
+        return "No description available"
+    
+    # Remove multiple whitespaces and newlines
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Remove common LinkedIn UI text like "Show more" or "Show less"
+    text = re.sub(r'Show\s+(more|less)', '', text)
+    
+    # Remove other UI elements that might be captured
+    text = re.sub(r'Apply on company site', '', text)
+    text = re.sub(r'Save', '', text)
+    
+    return text.strip()
+
+
+# List of all possible selectors for job descriptions
+DESCRIPTION_SELECTORS = [
+    'div.description__text',
+    'div.show-more-less-html__markup',
+    'div.jobs-description-content__text',
+    'div.job-details-jobs-unified-description__container',
+    'div[data-job-description]',
+    'section.description',
+    'div.job-description',
+    # More specific selectors
+    'div.jobs-box__html-content',
+    'div.jobs-unified-top-card__description-container',
+    'div.jobs-unified-description__content',
+    '.jobs-description__content',
+    'div.jobs-description-details',
+    'div.jobs-description__details',
+    # LinkedIn 2023-2025 selectors
+    'article[data-job-description]',
+    'div.jobs-description',
+    'div.job-view-layout',
+    'section.jobs-description',
+    # Broader fallback selectors
+    'div[class*="description"]',
+    'div[class*="job-description"]',
+    'article.description'
+]
+
+
+def extract_description_from_html(soup, job_url):
+    """
+    Try multiple approaches to extract job description from HTML.
+    
+    Args:
+        soup: BeautifulSoup object of the job page
+        job_url: URL of the job posting
+        
+    Returns:
+        Extracted description text
+    """
+    # Try with specific selectors first
+    for selector in DESCRIPTION_SELECTORS:
+        description_element = soup.select_one(selector)
+        if description_element:
+            text = description_element.get_text(" ", strip=True)
+            if text and len(text) > 50:  # Filter out too short texts
+                return clean_description_text(text)
+    
+    # Try extracting from JSON-LD structured data
+    json_ld = soup.select_one('script[type="application/ld+json"]')
+    if json_ld:
+        try:
+            data = json.loads(json_ld.string)
+            if "description" in data:
+                return clean_description_text(data["description"])
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    
+    # Try finding description in attributes
+    for attr in ['content', 'data-description', 'description']:
+        elements = soup.select(f'[{attr}]')
+        for element in elements:
+            if attr in element.attrs and len(element[attr]) > 100:
+                return clean_description_text(element[attr])
+    
+    # Fallback: try to extract from any large text section after the title
+    main_content = soup.select_one('main') or soup.select_one('body')
+    if main_content:
+        paragraphs = main_content.find_all(['p', 'div', 'span', 'li'], class_=lambda c: c and ('description' in c.lower() or 'detail' in c.lower()))
+        if paragraphs:
+            combined_text = ' '.join(p.get_text(strip=True) for p in paragraphs)
+            if len(combined_text) > 100:
+                return clean_description_text(combined_text)
+    
+    # Last resort: look for any containers with "Show more" buttons (common in LinkedIn)
+    show_more_containers = soup.select('[class*="show-more"]')
+    if show_more_containers:
+        for container in show_more_containers:
+            parent = container.parent
+            if parent and len(parent.get_text(strip=True)) > 100:  # Longer text is likely description
+                return clean_description_text(parent.get_text(strip=True))
+    
+    return "No description available"
 
 
 def extract_data_from_html(html_content: str, job_url: str) -> Dict[str, Any]:
@@ -29,6 +145,11 @@ def extract_data_from_html(html_content: str, job_url: str) -> Dict[str, Any]:
     Returns:
         Dizionario contenente i dati estratti dell'offerta
     """
+    job_id = extract_job_id_from_url(job_url) or "unknown"
+    
+    # Save HTML for debugging
+    save_debug_html(html_content, job_id)
+    
     soup = BeautifulSoup(html_content, 'html.parser')
     
     # Inizializza con i campi richiesti
@@ -43,30 +164,249 @@ def extract_data_from_html(html_content: str, job_url: str) -> Dict[str, Any]:
         'h1.topcard__title',
         'h1.jobs-unified-top-card__job-title',
         'h1[data-test-job-title]',
+        'h2.t-24',
+        'h2.job-title'
         'h1.job-title',
         '.job-view-layout h1',
         '.jobs-unified-top-card__content h1',
         'h1.artdeco-entity-lockup__title'
+        # New selectors based on examples
+        'h2.top-card-layout__title',                              # From your first example
+        '.topcard__title',                                        # Generic class
+        '.topcard__link h2',                                      # Parent-child selector
+        'a[data-tracking-control-name="public_jobs_topcard-title"] h2',  # Attribute-based
+
+        # Search results page selectors
+        'a.base-card__full-link span.sr-only',                    # From your second example
+        '[data-tracking-control-name="public_jobs_jserp-result_search-card"] span.sr-only',
+        '.base-card__full-link span.sr-only',                     # Simplified version
+
+        # More general selectors to try
+        '[class*="title"]',                                       # Any element with 'title' in class
+        'h1, h2',                                                 # Any h1 or h2 element
     ]
     
+    # Initialize the title
+    job_data["Title"] = "Offerta senza titolo"  # Default title
+
+    # Try all title selectors
     for selector in title_selectors:
-        title_element = soup.select_one(selector)
-        if title_element:
-            job_data["Title"] = title_element.get_text().strip()
+        title_elements = soup.select(selector)
+        for title_element in title_elements:
+            title_text = title_element.get_text(strip=True)
+            if title_text and len(title_text) > 5:  # Ensure it's not empty or too short
+                job_data["Title"] = title_text
+                # Once we find a valid title, break out of this selector loop
+                break
+        # If we found a title with this selector, break out of the outer loop
+        if job_data["Title"] != "Offerta senza titolo":
             break
+    
+    # Additional fallbacks if we still don't have a good title
+    if job_data["Title"] == "Offerta senza titolo":
+        # Try META tags
+        for meta_selector in ['meta[property="og:title"]', 'meta[name="title"]', 'title']:
+            meta_element = soup.select_one(meta_selector)
+            if meta_element:
+                if meta_selector == 'title':
+                    title_text = meta_element.get_text(strip=True)
+                else:
+                    title_text = meta_element.get('content', '')
+                    
+                if title_text:
+                    # Clean up typical LinkedIn title format "Job Title | Company | LinkedIn"
+                    for separator in [' | LinkedIn', ' - LinkedIn', ' at ', ' | ']:
+                        if separator in title_text:
+                            title_text = title_text.split(separator)[0].strip()
+                            
+                    if title_text and len(title_text) > 5:
+                        job_data["Title"] = title_text
+                        break
 
-    # Add fallback for title
-    if not job_data["Title"] or job_data["Title"] == "Offerta senza titolo":
-        meta_title = soup.select_one('meta[property="og:title"]')
-        if meta_title and 'content' in meta_title.attrs:
-            title_content = meta_title['content']
-            if " | LinkedIn" in title_content:
-                job_data["Title"] = title_content.split(" | LinkedIn")[0].strip()
-            else:
-                job_data["Title"] = title_content.strip()
-
-    # ...existing code for other fields...
-
+    
+    # Extract description using our enhanced approach
+    job_data["Description"] = extract_description_from_html(soup, job_url)
+    
+    # If description extraction failed, try direct API approach as fallback
+    if not job_data["Description"] or job_data["Description"] == "No description available":
+        api_description = get_job_details_from_api(job_id)
+        if api_description:
+            job_data["Description"] = api_description
+    
+    # Estrai la posizione
+    location_selectors = [
+        'span.topcard__flavor--bullet',
+        'span.job-details-jobs-unified-top-card__bullet',
+        'span.job-info__location',
+        '.jobs-unified-top-card__bullet',
+        '.jobs-unified-top-card__location',
+        '.job-details-jobs-unified-top-card__primary-description-container span'
+    ]
+    
+    for selector in location_selectors:
+        location_element = soup.select_one(selector)
+        if location_element:
+            job_data["Location"] = location_element.get_text().strip()
+            break
+    
+    # Estrai il nome dell'azienda
+    company_selectors = [
+        'a.topcard__org-name-link',
+        'a.job-details-jobs-unified-top-card__company-name',
+        'span.topcard__flavor--bullet ~ span.topcard__flavor',
+        '.jobs-unified-top-card__company-name',
+        '[data-tracking-control-name="public_jobs_topcard-org-name"]'
+    ]
+    
+    for selector in company_selectors:
+        company_element = soup.select_one(selector)
+        if company_element:
+            job_data["Company Name"] = company_element.get_text().strip()
+            break
+    
+    # Estrai il logo dell'azienda
+    logo_selectors = [
+        'img.artdeco-entity-image',
+        'img.lazy-image',
+        'img.jobs-company-logo',
+        'img.jobs-unified-top-card__company-logo'
+    ]
+    
+    for selector in logo_selectors:
+        logo_element = soup.select_one(selector)
+        if logo_element and 'src' in logo_element.attrs:
+            job_data["Company Logo"] = logo_element['src']
+            break
+    
+    # Estrai l'URL per candidarsi
+    apply_selectors = [
+        'a.apply-button',
+        'a[data-tracking-control-name="public_jobs_apply-link-offsite_sign-in"]',
+        'a[data-control-name="view_application"]',
+        'a[data-job-id]'
+    ]
+    
+    for selector in apply_selectors:
+        apply_button = soup.select_one(selector)
+        if apply_button and 'href' in apply_button.attrs:
+            job_data["Company Apply Url"] = apply_button['href']
+            break
+    
+    if not job_data["Company Apply Url"]:
+        job_data["Company Apply Url"] = f"https://www.linkedin.com/job-apply/{job_url.split('/')[-1].split('?')[0]}"
+    
+    # Estrai descrizione dell'azienda
+    company_desc_selectors = [
+        'div.company-description',
+        'div.topcard__org-description',
+        'div.jobs-company-description',
+        'p.topcard__flavor--metadata'
+    ]
+    
+    for selector in company_desc_selectors:
+        company_about = soup.select_one(selector)
+        if company_about:
+            job_data["Company Description"] = company_about.get_text().strip()
+            break
+    
+    # Website dell'azienda
+    website_selectors = [
+        'a[href*="://"].link-without-visited-state',
+        'a[data-tracking-control-name="public_jobs_topcard-org-name"]',
+        'a.ember-view.org-top-card-primary-actions__action'
+    ]
+    
+    for selector in website_selectors:
+        company_website_element = soup.select_one(selector)
+        if company_website_element and 'href' in company_website_element.attrs:
+            href = company_website_element['href']
+            if href.startswith('http') and 'linkedin.com' not in href:
+                job_data["Company Website"] = href
+                break
+    
+    # Estrai altre informazioni sull'azienda
+    company_details = soup.select('dd.top-card-layout__card-elements, .jobs-company-info dd, .jobs-unified-top-card__job-insight')
+    
+    for detail in company_details:
+        text = detail.get_text().strip().lower()
+        
+        if "employees" in text:
+            # Estrai numero di dipendenti
+            numbers = re.findall(r'\d+[,\.]?\d*', text.replace(',', ''))
+            if numbers:
+                try:
+                    if len(numbers) >= 2:
+                        job_data["Employee Count"] = (int(float(numbers[0])) + int(float(numbers[1]))) // 2
+                    else:
+                        job_data["Employee Count"] = int(float(numbers[0]))
+                except (ValueError, TypeError):
+                    pass
+        elif "headquarters" in text:
+            job_data["Headquarters"] = text.replace("headquarters:", "").strip()
+        elif "industry" in text:
+            job_data["Industry"] = text.replace("industry:", "").strip()
+        elif "founded" in text:
+            year_match = re.search(r'\b\d{4}\b', text)
+            if year_match:
+                try:
+                    job_data["Company Founded"] = int(year_match.group(0))
+                except ValueError:
+                    pass
+    
+    # Estrai specialties se disponibili
+    specialties_selectors = [
+        'div.specialties',
+        'div.org-add-specialities',
+        '.company-specialties'
+    ]
+    
+    for selector in specialties_selectors:
+        specialties_element = soup.select_one(selector)
+        if specialties_element:
+            job_data["Specialties"] = specialties_element.get_text().strip()
+            break
+    
+    # Estrai poster ID se disponibile
+    poster_selectors = [
+        '[data-poster-id]',
+        '[data-job-poster-id]',
+        'a[data-control-name="job_card_company"]'
+    ]
+    
+    for selector in poster_selectors:
+        poster_element = soup.select_one(selector)
+        if poster_element:
+            for attr in ['data-poster-id', 'data-job-poster-id', 'data-company-id']:
+                if attr in poster_element.attrs:
+                    job_data["Poster Id"] = poster_element[attr]
+                    break
+            if job_data["Poster Id"]:
+                break
+    
+    # Fallback: genera Poster ID dal nome dell'azienda
+    if not job_data["Poster Id"] and job_data["Company Name"]:
+        job_data["Poster Id"] = str(abs(hash(job_data["Company Name"])) % 10000000)
+    
+    # Estrai data di pubblicazione
+    posted_selectors = [
+        'span.posted-date',
+        'span.job-details-jobs-unified-top-card__posted-date',
+        'span.job-details-jobs-unified-top-card__subtitle-secondary-grouping span',
+        '.jobs-unified-top-card__posted-date',
+        '.job-details-jobs-unified-top-card__subtitle-secondary-grouping'
+    ]
+    
+    for selector in posted_selectors:
+        posted_date_element = soup.select_one(selector)
+        if posted_date_element:
+            posted_text = posted_date_element.get_text().strip()
+            
+            # Use the parse_posted_date function to extract and standardize the date
+            created_date = parse_posted_date(posted_text)
+            if created_date:
+                job_data["Created At"] = created_date
+                break
+    
     # Verifica se la pagina contiene informazioni del hiring manager
     hiring_manager_selectors = [
         '.hiring-manager',
@@ -85,7 +425,79 @@ def extract_data_from_html(html_content: str, job_url: str) -> Dict[str, Any]:
             job_data["Hiring Manager Image"] = None
             break
     
+    # Imposta lo stato dell'offerta
+    job_data["Job State"] = "LISTED"
+    
+    # Imposta i campi null richiesti dallo schema
+    job_data["Skill"] = None
+    job_data["Insight"] = None
+    
     return job_data
+
+
+def get_job_details_from_api(job_id):
+    """
+    Try to get job details directly from LinkedIn's API endpoint.
+    
+    Args:
+        job_id: LinkedIn job ID
+        
+    Returns:
+        Description text if successful, None otherwise
+    """
+    url = f"https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/{job_id}"
+    headers = get_request_headers()
+    
+    # More API-friendly headers
+    headers['Accept'] = 'application/json, text/javascript, */*; q=0.01'
+    headers['X-Requested-With'] = 'XMLHttpRequest'
+    
+    try:
+        response_text = make_request_with_backoff(url, headers)
+        if not response_text:
+            return None
+        
+        # Save debug HTML
+        save_debug_html(response_text, f"{job_id}_api")
+        
+        # LinkedIn may return HTML instead of JSON
+        soup = BeautifulSoup(response_text, 'html.parser')
+        
+        # Try to extract from description section
+        description = extract_description_from_html(soup, url)
+        if description and description != "No description available":
+            return description
+        
+        # Try to extract from JSON-LD
+        json_ld = soup.select_one('script[type="application/ld+json"]')
+        if json_ld:
+            try:
+                data = json.loads(json_ld.string)
+                if "description" in data:
+                    return clean_description_text(data["description"])
+            except (json.JSONDecodeError, AttributeError):
+                pass
+        
+        # Try to find description in the response itself if it looks like JSON
+        try:
+            if response_text.strip().startswith('{') and response_text.strip().endswith('}'):
+                data = json.loads(response_text)
+                if "description" in data:
+                    desc_text = data["description"]
+                    if isinstance(desc_text, str):
+                        # Clean up HTML from description
+                        if '<' in desc_text and '>' in desc_text:
+                            desc_soup = BeautifulSoup(desc_text, 'html.parser')
+                            desc_text = desc_soup.get_text(" ", strip=True)
+                        return clean_description_text(desc_text)
+        except (json.JSONDecodeError, TypeError):
+            pass
+            
+    except Exception as e:
+        logging.error(f"Error in get_job_details_from_api: {str(e)}")
+    
+    return None
+
 
 def parse_posted_date(posted_text: str) -> Optional[str]:
     """
@@ -167,7 +579,7 @@ def extract_data_from_api_response(api_response: Dict[str, Any], job_url: str) -
     Returns:
         Dizionario contenente i dati estratti dell'offerta
     """
-    # Controlla se abbiamo ricevuto HTML invece di JSON
+    # Check if we received HTML instead of JSON
     if "html_content" in api_response:
         return extract_data_from_html(api_response["html_content"], job_url)
     
@@ -483,6 +895,9 @@ def scrape_linkedin_job(job_url: str, min_delay: int = 1, max_delay: int = 3,
             logging.error("Impossibile recuperare il contenuto HTML")
             return None
         
+        # Save HTML for debugging
+        save_debug_html(html_content, job_id)
+        
         job_data = extract_data_from_html(html_content, job_url)
     
     # Valida e pulisci i dati
@@ -653,10 +1068,12 @@ def cleanup_debug_files(keep_last_n: int = 5) -> None:
     
     try:
         # Trova tutti i file di debug
-        debug_files = glob.glob("linkedin_debug_page_*.html")
-        
-        # Ordina per numero di pagina
-        debug_files.sort(key=lambda f: int(re.search(r'page_(\d+)\.html', f).group(1)))
+        debug_files = glob.glob("debug_html/job_*.html")
+        if not debug_files:
+            return
+            
+        # Ordina per data di creazione (più recente per ultimo)
+        debug_files.sort(key=lambda f: os.path.getmtime(f))
         
         # Mantieni solo gli ultimi N
         files_to_delete = debug_files[:-keep_last_n] if keep_last_n > 0 else debug_files

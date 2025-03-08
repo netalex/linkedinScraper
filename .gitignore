@@ -42,6 +42,8 @@ job_files/
 linkedin_jobs*.json
 jobs_index.json
 logs/
+linkedin_jobs.json.bak
+.DS_Store
 
 # output
 linkedin_jobs*.json
