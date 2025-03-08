@@ -30,6 +30,12 @@ def save_job_data_to_json(job_data: Dict[str, Any], output_file: str) -> bool:
         output_dir = os.path.dirname(output_file)
         if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir)
+        
+        # Validate job data before saving
+        from linkedin_job_scraper.models import validate_job_data
+        if not validate_job_data(job_data):
+            logging.error("Job data failed validation, not saving to file")
+            return False
             
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump([job_data], f, indent=2, ensure_ascii=False)
