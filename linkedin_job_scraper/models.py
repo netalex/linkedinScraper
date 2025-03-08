@@ -97,8 +97,48 @@ def validate_job_data(job_data: Dict[str, Any]) -> bool:
         True se la validazione ha successo, False altrimenti
     """
     try:
-        # Avvolgi in un array come richiesto dallo schema
-        jsonschema_validate([job_data], SCHEMA)
+        # Make sure required fields exist
+        required_fields = [
+            "Title", "Description", "Primary Description", "Detail URL", "Location",
+            "Poster Id", "Company Name", "Company Description", "Headquarters",
+            "Created At", "ScrapedAt"
+        ]
+        
+        for field in required_fields:
+            if field not in job_data or job_data[field] is None or job_data[field] == "":
+                logging.error(f"Required field missing or empty: {field}")
+                return False
+        
+        # Check array fields
+        array_fields = ["Skill", "Insight", "Specialties"]
+        for field in array_fields:
+            if field in job_data and job_data[field] is not None:
+                if not isinstance(job_data[field], list):
+                    logging.error(f"Field {field} should be an array or null, got: {type(job_data[field])}")
+                    return False
+        
+        # Numeric fields
+        numeric_fields = ["Employee Count", "Company Founded"]
+        for field in numeric_fields:
+            if field in job_data and job_data[field] is not None:
+                if not isinstance(job_data[field], int):
+                    logging.error(f"Field {field} should be an integer or null, got: {type(job_data[field])}")
+                    return False
+        
+        # Date fields
+        date_fields = ["Created At", "ScrapedAt"]
+        for field in date_fields:
+            if field in job_data and job_data[field]:
+                try:
+                    # Validate ISO format
+                    datetime.datetime.fromisoformat(job_data[field].replace('Z', '+00:00'))
+                except (ValueError, TypeError):
+                    logging.error(f"Field {field} is not a valid ISO date format: {job_data[field]}")
+                    return False
+        
+        # Wrap in array as per schema for full validation
+        from jsonschema import validate
+        validate([job_data], SCHEMA)
         return True
     except Exception as e:
         logging.error(f"Validazione dello schema fallita: {str(e)}")
