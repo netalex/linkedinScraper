@@ -702,45 +702,95 @@ def extract_data_from_api_response(api_response: Dict[str, Any], job_url: str) -
             # Descrizione azienda
             if "description" in org:
                 job_data["Company Description"] = org["description"]
-        
-        # Data
-        if "datePosted" in api_response:
-            try:
-                # Gestisci diversi formati di data ISO
-                date_string = api_response["datePosted"]
-                if 'Z' in date_string:
-                    date_string = date_string.replace('Z', '+00:00')
-                
-                # Per compatibilità con versioni Python precedenti alla 3.7
-                if '+' in date_string:
-                    date_part = date_string.split('+')[0]
-                    posted_date = datetime.datetime.fromisoformat(date_part)
+
+                    # Update specialties handling
+            if "specialties" in org:
+                specialties = org["specialties"]
+                if isinstance(specialties, list):
+                    job_data["Specialties"] = specialties
+                elif isinstance(specialties, str):
+                    job_data["Specialties"] = [s.strip() for s in re.split(r'[,;]+', specialties) if s.strip()]
                 else:
-                    posted_date = datetime.datetime.fromisoformat(date_string)
-                
-                job_data["Created At"] = posted_date.isoformat()
-            except (ValueError, AttributeError) as e:
-                logging.warning(f"Errore nell'analisi della data di pubblicazione: {e}")
-                # Usa la data corrente meno 30 giorni come fallback
-                job_data["Created At"] = (datetime.datetime.now() - datetime.timedelta(days=30)).isoformat()
-        
-        # URL candidatura
-        if "url" in api_response:
-            job_data["Company Apply Url"] = api_response["url"]
+                    job_data["Specialties"] = None
+            else:
+                job_data["Specialties"] = None
         else:
-            job_data["Company Apply Url"] = job_url
+            # For standard API response format
+            # In the company processing section:
+            if "specialties" in company:
+                specialties = company["specialties"]
+                if isinstance(specialties, list):
+                    job_data["Specialties"] = specialties
+                elif isinstance(specialties, str):
+                    job_data["Specialties"] = [s.strip() for s in re.split(r'[,;]+', specialties) if s.strip()]
+                else:
+                    job_data["Specialties"] = None
+            else:
+                job_data["Specialties"] = None
+
+
+            # Data
+            if "datePosted" in api_response:
+                try:
+                    # Gestisci diversi formati di data ISO
+                    date_string = api_response["datePosted"]
+                    if 'Z' in date_string:
+                        date_string = date_string.replace('Z', '+00:00')
+                    
+                    # Per compatibilità con versioni Python precedenti alla 3.7
+                    if '+' in date_string:
+                        date_part = date_string.split('+')[0]
+                        posted_date = datetime.datetime.fromisoformat(date_part)
+                    else:
+                        posted_date = datetime.datetime.fromisoformat(date_string)
+                    
+                    job_data["Created At"] = posted_date.isoformat()
+                except (ValueError, AttributeError) as e:
+                    logging.warning(f"Errore nell'analisi della data di pubblicazione: {e}")
+                    # Usa la data corrente meno 30 giorni come fallback
+                    job_data["Created At"] = (datetime.datetime.now() - datetime.timedelta(days=30)).isoformat()
+            
+            # URL candidatura
+            if "url" in api_response:
+                job_data["Company Apply Url"] = api_response["url"]
+            else:
+                job_data["Company Apply Url"] = job_url
+            
+            # Industria (se disponibile in qualsiasi campo)
+            for field in ["industry", "occupationalCategory"]:
+                if field in api_response:
+                    value = api_response[field]
+                    if isinstance(value, str):
+                        job_data["Industry"] = value
+                    elif isinstance(value, dict) and "name" in value:
+                        job_data["Industry"] = value["name"]
+            
+            return job_data
         
-        # Industria (se disponibile in qualsiasi campo)
-        for field in ["industry", "occupationalCategory"]:
-            if field in api_response:
-                value = api_response[field]
-                if isinstance(value, str):
-                    job_data["Industry"] = value
-                elif isinstance(value, dict) and "name" in value:
-                    job_data["Industry"] = value["name"]
-        
-        return job_data
-    
+        # Check for skills in API response
+        if "skills" in api_response and api_response["skills"]:
+            skills = api_response["skills"]
+            if isinstance(skills, list):
+                job_data["Skill"] = skills
+            elif isinstance(skills, str):
+                job_data["Skill"] = [s.strip() for s in re.split(r'[,;]+', skills) if s.strip()]
+            else:
+                job_data["Skill"] = None
+        else:
+            job_data["Skill"] = None
+
+        # Check for insights in API response
+        if "insights" in api_response and api_response["insights"]:
+            insights = api_response["insights"]
+            if isinstance(insights, list):
+                job_data["Insight"] = insights
+            elif isinstance(insights, str):
+                job_data["Insight"] = [insights.strip()]
+            else:
+                job_data["Insight"] = None
+        else:
+            job_data["Insight"] = None
+
     # Formato di risposta API standard
     if 'title' in api_response:
         job_data["Title"] = api_response['title']
@@ -899,13 +949,10 @@ def extract_data_from_api_response(api_response: Dict[str, Any], job_url: str) -
         except (ValueError, TypeError):
             pass
     
-    # Hiring Manager - impostiamo a null come da schema
-    job_data["Hiring Manager Title"] = None
-    job_data["Hiring Manager Subtitle"] = None
-    job_data["Hiring Manager Title Insight"] = None
-    job_data["Hiring Manager Profile"] = None
-    job_data["Hiring Manager Image"] = None
-    
+    # Generate Primary Description if not already set
+    if not job_data["Primary Description"]:
+        job_data["Primary Description"] = generate_primary_description(job_data)
+        
     return job_data
 
 
