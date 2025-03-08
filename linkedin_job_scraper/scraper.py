@@ -1035,83 +1035,81 @@ def clean_and_validate_job_data(job_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     cleaned_data = job_data.copy()
     
-    # Ensure all required fields are present with proper default values
-    if cleaned_data["Title"] is None or cleaned_data["Title"] == "":
-        cleaned_data["Title"] = "Offerta senza titolo"
+    # Generate Primary Description if missing
+    if not cleaned_data.get("Primary Description"):
+        cleaned_data["Primary Description"] = generate_primary_description(cleaned_data)
     
-    if cleaned_data["Description"] is None or cleaned_data["Description"] == "":
-        cleaned_data["Description"] = "Nessuna descrizione disponibile"
+    # Ensure required string fields are not empty
+    required_string_fields = [
+        "Title", "Description", "Primary Description", "Detail URL", 
+        "Location", "Poster Id", "Company Name", "Company Description", 
+        "Headquarters"
+    ]
     
-    if cleaned_data["Location"] is None or cleaned_data["Location"] == "":
-        cleaned_data["Location"] = "Remote"
+    for field in required_string_fields:
+        if not cleaned_data.get(field):
+            if field == "Title":
+                cleaned_data[field] = "Untitled Job"
+            elif field == "Description":
+                cleaned_data[field] = "No description available"
+            elif field == "Primary Description":
+                cleaned_data[field] = "Job posting without description"
+            elif field == "Location":
+                cleaned_data[field] = "Remote"
+            elif field == "Poster Id":
+                cleaned_data[field] = "000000"
+            elif field == "Company Name":
+                cleaned_data[field] = "Unknown Company"
+            elif field == "Company Description":
+                cleaned_data[field] = "No company description available"
+            elif field == "Headquarters":
+                cleaned_data[field] = "Unknown"
     
-    if cleaned_data["Job State"] is None or cleaned_data["Job State"] == "":
-        cleaned_data["Job State"] = "LISTED"
+    # Ensure nullable fields are properly null, not empty strings or empty arrays
+    nullable_string_fields = [
+        "Company Logo", "Company Apply Url", "Company Website", "Industry",
+        "Job State", "Hiring Manager Title", "Hiring Manager Subtitle",
+        "Hiring Manager Title Insight", "Hiring Manager Profile", "Hiring Manager Image"
+    ]
     
-    if cleaned_data["Headquarters"] is None or cleaned_data["Headquarters"] == "":
-        cleaned_data["Headquarters"] = "Sconosciuta"
+    for field in nullable_string_fields:
+        if field in cleaned_data and (cleaned_data[field] == "" or cleaned_data[field] == []):
+            cleaned_data[field] = None
     
-    if cleaned_data["Specialties"] is None or cleaned_data["Specialties"] == "":
-        cleaned_data["Specialties"] = "Non specificato"
+    # Ensure array fields are correctly formatted
+    array_fields = ["Skill", "Insight", "Specialties"]
+    for field in array_fields:
+        # If it's a string, convert to array
+        if field in cleaned_data and isinstance(cleaned_data[field], str) and cleaned_data[field]:
+            cleaned_data[field] = [s.strip() for s in re.split(r'[,;]+', cleaned_data[field]) if s.strip()]
+        # If empty array, set to null
+        elif field in cleaned_data and (not cleaned_data[field] or cleaned_data[field] == []):
+            cleaned_data[field] = None
     
-    if cleaned_data["Poster Id"] is None or cleaned_data["Poster Id"] == "":
-        cleaned_data["Poster Id"] = "000000"
-    
-    if cleaned_data["Company Name"] is None or cleaned_data["Company Name"] == "":
-        cleaned_data["Company Name"] = "Azienda sconosciuta"
-    
-    if cleaned_data["Company Logo"] is None or cleaned_data["Company Logo"] == "":
-        cleaned_data["Company Logo"] = "https://static.licdn.com/aero-v1/sc/h/dbvmk0tsk0o0hd59fi64z3own"
-    
-    if cleaned_data["Company Apply Url"] is None or cleaned_data["Company Apply Url"] == "":
-        cleaned_data["Company Apply Url"] = cleaned_data["Detail URL"]
-    
-    if cleaned_data["Company Website"] is None or cleaned_data["Company Website"] == "":
-        cleaned_data["Company Website"] = "https://www.linkedin.com/"
-    
-    if cleaned_data["Company Description"] is None or cleaned_data["Company Description"] == "":
-        cleaned_data["Company Description"] = "Nessuna descrizione dell'azienda disponibile"
-    
-    if cleaned_data["Industry"] is None or cleaned_data["Industry"] == "":
-        cleaned_data["Industry"] = "Information Technology"
-    
-    if cleaned_data["Headquarters"] is None or cleaned_data["Headquarters"] == "":
-        cleaned_data["Headquarters"] = "Sconosciuta"
-    
-    if cleaned_data["Specialties"] is None or cleaned_data["Specialties"] == "":
-        cleaned_data["Specialties"] = "Non specificato"
-
-
-
-    cleaned_data["Hiring Manager Image"] = None
-
-    # Assicurati che Employee Count sia un intero
-    if cleaned_data["Employee Count"] is None:
-        cleaned_data["Employee Count"] = 0 
-
-    if cleaned_data["Employee Count"] is not None:
+    # Ensure Employee Count is an integer or null
+    if cleaned_data.get("Employee Count") is not None:
         try:
             cleaned_data["Employee Count"] = int(cleaned_data["Employee Count"])
         except (ValueError, TypeError):
             cleaned_data["Employee Count"] = None
     
-    # Assicurati che Company Founded sia un intero
-    if cleaned_data["Company Founded"] is not None:
+    # Ensure Company Founded is an integer or null
+    if cleaned_data.get("Company Founded") is not None:
         try:
             cleaned_data["Company Founded"] = int(cleaned_data["Company Founded"])
         except (ValueError, TypeError):
             cleaned_data["Company Founded"] = None
-
-    # Assicurati che Created At sia una stringa di data in formato ISO valida
-    if cleaned_data["Created At"] is None:
-        # Se non abbiamo una data di creazione, usa 30 giorni fa come predefinito
+    
+    # Ensure Created At is a valid ISO format date string
+    if cleaned_data.get("Created At") is None:
+        # Default to 30 days ago
         thirty_days_ago = datetime.datetime.now() - datetime.timedelta(days=30)
         cleaned_data["Created At"] = thirty_days_ago.isoformat()
     
     # Ensure ScrapedAt is set
-    if cleaned_data["ScrapedAt"] is None or cleaned_data["ScrapedAt"] == "":
+    if cleaned_data.get("ScrapedAt") is None:
         cleaned_data["ScrapedAt"] = datetime.datetime.now().isoformat()
-
+    
     return cleaned_data
 
 
