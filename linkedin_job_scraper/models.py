@@ -193,3 +193,38 @@ def enrich_job_data_for_application(job_data: Dict[str, Any]) -> Dict[str, Any]:
     }
     
     return enriched_data
+
+# Add to linkedin_job_scraper/scraper.py
+
+def generate_primary_description(job_data: Dict[str, Any]) -> str:
+    """
+    Generate a concise primary description from job data.
+    
+    Args:
+        job_data: Dictionary containing job data
+        
+    Returns:
+        A concise primary description string
+    """
+    company = job_data.get("Company Name", "")
+    title = job_data.get("Title", "")
+    location = job_data.get("Location", "")
+    
+    # Extract first few sentences from description for a brief summary
+    description = job_data.get("Description", "")
+    sentences = re.split(r'(?<=[.!?])\s+', description)
+    short_desc = " ".join(sentences[:2]) if sentences else ""
+    
+    # Limit short description length
+    if len(short_desc) > 150:
+        short_desc = short_desc[:147] + "..."
+    
+    # Combine into a concise description
+    primary_desc = f"{title} at {company}"
+    if location:
+        primary_desc += f" in {location}"
+    
+    if short_desc:
+        primary_desc += f". {short_desc}"
+        
+    return primary_desc.strip()
