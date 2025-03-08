@@ -1143,6 +1143,7 @@ def process_search_results(search_url: str, output_file: str, max_jobs: int = 10
     
     # Scraping di ogni offerta
     all_jobs_data = []
+    valid_jobs_data = []
     
     try:
         from tqdm import tqdm
@@ -1162,23 +1163,34 @@ def process_search_results(search_url: str, output_file: str, max_jobs: int = 10
         job_data = scrape_linkedin_job(job_url, min_delay, max_delay, proxy_url)
         if job_data:
             all_jobs_data.append(job_data)
-            logging.info(f"Scraping offerta completato con successo: {job_data['Title']} presso {job_data['Company Name']}")
+            
+            # Valida rispetto allo schema
+            if validate_job_data(job_data):
+                valid_jobs_data.append(job_data)
+                logging.info(f"Scraping offerta completato con successo e validato: {job_data['Title']} presso {job_data['Company Name']}")
+            else:
+                logging.warning(f"I dati dell'offerta non hanno superato la validazione: {job_data['Title']} presso {job_data['Company Name']}")
         else:
             logging.warning(f"Impossibile effettuare lo scraping dell'offerta con ID {job_id}")
     
-    if not all_jobs_data:
-        logging.error("Impossibile effettuare lo scraping di alcuna offerta")
+    if not valid_jobs_data:
+        logging.error("Impossibile effettuare lo scraping di alcuna offerta valida")
         return False, []
     
     # Salva nel file JSON
     try:
         with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(all_jobs_data, f, indent=2, ensure_ascii=False)
-        logging.info(f"Salvate {len(all_jobs_data)} offerte di lavoro in {output_file}")
-        return True, all_jobs_data
+            json.dump(valid_jobs_data, f, indent=2, ensure_ascii=False)
+        logging.info(f"Salvate {len(valid_jobs_data)} offerte di lavoro valide in {output_file}")
+        
+        # Rapporto sulle offerte non valide
+        if len(all_jobs_data) != len(valid_jobs_data):
+            logging.warning(f"{len(all_jobs_data) - len(valid_jobs_data)} offerte non hanno superato la validazione e sono state escluse")
+            
+        return True, valid_jobs_data
     except Exception as e:
         logging.error(f"Errore nel salvataggio dei dati delle offerte nel file: {str(e)}")
-        return False, all_jobs_data
+        return False, valid_jobs_data
 
 
 def cleanup_debug_files(keep_last_n: int = 5) -> None:
