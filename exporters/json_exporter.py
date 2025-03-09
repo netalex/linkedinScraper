@@ -87,8 +87,19 @@ def export_individual_job_files(jobs_data: List[Dict[str, Any]], output_dir: str
     Returns:
         Lista di percorsi dei file esportati
     """
+    logging.info(f"USANDO LA VERSIONE DI export_individual_job_files DA json_exporter.py")
+    logging.info(f"Esportazione di {len(jobs_data)} job files nella directory: {output_dir}")
+    
     # Crea la directory di output se non esiste
     os.makedirs(output_dir, exist_ok=True)
+    
+    # IMPORTANTE: Crea un dizionario con job_id -> created_at dai dati originali
+    # poiché il campo è presente solo nei risultati di ricerca di gruppo
+    original_created_at = {}
+    for job in jobs_data:
+        job_id = job.get('Detail URL', '').split('/')[-1].split('?')[0]
+        if job_id and job.get('Created At'):
+            original_created_at[job_id] = job['Created At']
     
     exported_files = []
     
@@ -98,11 +109,26 @@ def export_individual_job_files(jobs_data: List[Dict[str, Any]], output_dir: str
         if not job_id:
             continue
             
+        # IMPORTANTE: Preserva created_at prima dell'arricchimento
+        created_at = job.get('Created At')
+        if not created_at and job_id in original_created_at:
+            created_at = original_created_at[job_id]
+            logging.info(f"Preservata data di creazione originale per job {job_id}: {created_at}")
+        
         # Arricchisci i dati se richiesto
         if enrich and 'Application' not in job:
             job = enrich_job_data_for_application(job)
         
-        # Crea un nome di file sanitizzato con ID offerta, nome azienda e titolo
+        # IMPORTANTE: Ripristina created_at dopo l'arricchimento
+        if created_at:
+            job['Created At'] = created_at
+        elif not job.get('Created At'):
+            # Fallback: usa data corrente meno 7 giorni
+            one_week_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
+            job['Created At'] = one_week_ago
+            logging.info(f"Usata data fallback per job {job_id}: -{one_week_ago}")
+        
+        # Crea un nome di file sanitizzato
         company_name = sanitize_filename(job.get('Company Name', 'Unknown'))
         job_title = sanitize_filename(job.get('Title', 'Unknown'))
         
@@ -135,12 +161,28 @@ def create_jobs_index(jobs_data: List[Dict[str, Any]], output_file: str = 'jobs_
     """
     index = []
     
+    # Analogamente, crea un dizionario con job_id -> created_at
+    original_created_at = {}
+    for job in jobs_data:
+        job_id = job.get('Detail URL', '').split('/')[-1].split('?')[0]
+        if job_id and job.get('Created At'):
+            original_created_at[job_id] = job['Created At']
+    
     for job in jobs_data:
         # Estrai l'ID dell'offerta dall'URL
         job_id = job.get('Detail URL', '').split('/')[-1].split('?')[0]
         if not job_id:
             continue
             
+        # Usa created_at dal job o dal dizionario originale
+        created_at = job.get('Created At')
+        if not created_at and job_id in original_created_at:
+            created_at = original_created_at[job_id]
+        elif not created_at:
+            # Fallback: usa data corrente meno 7 giorni
+            one_week_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()
+            created_at = one_week_ago
+        
         # Crea una voce di indice con informazioni essenziali
         index_entry = {
             "JobId": job_id,

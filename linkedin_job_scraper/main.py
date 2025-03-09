@@ -37,6 +37,7 @@ except ImportError:
     
     def export_individual_job_files(jobs_data, output_dir, enrich=True):
         """Funzione di fallback per esportare file individuali."""
+        logging.info("USANDO LA VERSIONE DI export_individual_job_files DA main.py")
         os.makedirs(output_dir, exist_ok=True)
         exported_files = []
         for job in jobs_data:
