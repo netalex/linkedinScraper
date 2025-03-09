@@ -4,6 +4,10 @@ Definisce la struttura dei dati e le funzioni di validazione.
 """
 
 import logging
+import re
+# import datetime
+from datetime import datetime
+
 from typing import Dict, Any, List
 from jsonschema import validate as jsonschema_validate
 
@@ -28,11 +32,11 @@ SCHEMA = {
                 "Company Name": {"type": "string"},
                 "Company Logo": {"type": ["string", "null"]},
                 "Company Apply Url": {"type": ["string", "null"]},
-                "Company Description": {"type": "string"},
+                "Company Description": {"type": ["string", "null"]},
                 "Company Website": {"type": ["string", "null"]},
                 "Industry": {"type": ["string", "null"]},
                 "Employee Count": {"type": ["integer", "null"]},
-                "Headquarters": {"type": "string"},
+                "Headquarters": {"type": ["string", "null"]},
                 "Company Founded": {"type": ["integer", "null"]},
                 "Specialties": {"type": ["array", "null"]},
                 "Hiring Manager Title": {"type": ["string", "null"]},
@@ -45,8 +49,7 @@ SCHEMA = {
             },
             "required": [
                 "Title", "Description", "Primary Description", "Detail URL", "Location",
-                "Poster Id", "Company Name", "Company Description", "Headquarters",
-                "Created At", "ScrapedAt"
+                "Poster Id", "Company Name", "Created At", "ScrapedAt"
             ]
         }
     ]
@@ -100,12 +103,14 @@ def validate_job_data(job_data: Dict[str, Any]) -> bool:
         # Make sure required fields exist
         required_fields = [
             "Title", "Description", "Primary Description", "Detail URL", "Location",
-            "Poster Id", "Company Name", "Company Description", "Headquarters",
-            "Created At", "ScrapedAt"
+            "Poster Id", "Company Name", "Created At", "ScrapedAt"
         ]
         
         for field in required_fields:
             if field not in job_data or job_data[field] is None or job_data[field] == "":
+                # Se il campo è "Company Description", non blocchiamo la validazione
+                if field == "Company Description":
+                    continue
                 logging.error(f"Required field missing or empty: {field}")
                 return False
         
@@ -131,7 +136,7 @@ def validate_job_data(job_data: Dict[str, Any]) -> bool:
             if field in job_data and job_data[field]:
                 try:
                     # Validate ISO format
-                    datetime.datetime.fromisoformat(job_data[field].replace('Z', '+00:00'))
+                    datetime.fromisoformat(job_data[field].replace('Z', '+00:00'))
                 except (ValueError, TypeError):
                     logging.error(f"Field {field} is not a valid ISO date format: {job_data[field]}")
                     return False
@@ -165,11 +170,9 @@ def create_empty_job_data() -> Dict[str, Any]:
         "Company Name": "",
         "Company Logo": None,  # Changed from None to null
         "Company Apply Url": None,  # Changed from None to null
-        "Company Description": "",
         "Company Website": None,  # Changed from None to null
         "Industry": None,  # Changed from None to null
         "Employee Count": None,  # Already null
-        "Headquarters": "",
         "Company Founded": None,  # Already null
         "Specialties": None,  # Changed from string to null
         "Hiring Manager Title": None,  # Already null

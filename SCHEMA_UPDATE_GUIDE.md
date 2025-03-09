@@ -24,8 +24,6 @@ The following fields are now required:
 - `Location`
 - `Poster Id`
 - `Company Name`
-- `Company Description`
-- `Headquarters`
 - `Created At`
 - `ScrapedAt`
 

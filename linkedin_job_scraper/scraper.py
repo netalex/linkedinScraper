@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 
 from .utils import extract_job_id_from_url, make_request_with_backoff, get_request_headers
 from .api import try_api_endpoint, extract_job_ids_from_search
-from .models import SCHEMA, validate_job_data, create_empty_job_data, enrich_job_data_for_application
+from .models import SCHEMA, validate_job_data, create_empty_job_data, enrich_job_data_for_application, generate_primary_description
 
 
 # Debug utility function
@@ -356,6 +356,16 @@ def extract_data_from_html(html_content: str, job_url: str) -> Dict[str, Any]:
     
     # Estrai specialties se disponibili
     specialties_text = ""
+
+    # Selettori per le specializzazioni dell'azienda
+    specialties_selectors = [
+        'ul.company-specialties',
+        '.jobs-unified-top-card__specialties',
+        '.org-specialties',
+        'div.company-specialties',
+        'div.org-specialties-list'
+    ]
+
     for selector in specialties_selectors:
         specialties_element = soup.select_one(selector)
         if specialties_element:
@@ -1042,8 +1052,7 @@ def clean_and_validate_job_data(job_data: Dict[str, Any]) -> Dict[str, Any]:
     # Ensure required string fields are not empty
     required_string_fields = [
         "Title", "Description", "Primary Description", "Detail URL", 
-        "Location", "Poster Id", "Company Name", "Company Description", 
-        "Headquarters"
+        "Location", "Poster Id", "Company Name"
     ]
     
     for field in required_string_fields:
@@ -1060,10 +1069,10 @@ def clean_and_validate_job_data(job_data: Dict[str, Any]) -> Dict[str, Any]:
                 cleaned_data[field] = "000000"
             elif field == "Company Name":
                 cleaned_data[field] = "Unknown Company"
-            elif field == "Company Description":
-                cleaned_data[field] = "No company description available"
-            elif field == "Headquarters":
-                cleaned_data[field] = "Unknown"
+            # elif field == "Company Description":
+            #     cleaned_data[field] = "No company description available"
+            # elif field == "Headquarters":
+            #     cleaned_data[field] = "Unknown"
     
     # Ensure nullable fields are properly null, not empty strings or empty arrays
     nullable_string_fields = [
