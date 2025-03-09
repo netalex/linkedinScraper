@@ -10,6 +10,7 @@ import argparse
 import json
 from typing import List, Dict, Any, Tuple
 import logging
+from .scraper import direct_export_from_json
 
 # Aggiungi la directory principale al path per consentire l'importazione di exporters
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -167,9 +168,22 @@ def main():
             
             # Se richiesto, esporta file individuali e crea indice
             if args.export_individual and success and all_jobs_data:
-                export_individual_job_files(all_jobs_data, args.output_dir, enrich=True)
-                create_jobs_index(all_jobs_data, f"{args.output_dir}/jobs_index.json")
-            
+                try:
+                    # Importazione esplicita per evitare errori
+                    # from linkedin_job_scraper.scraper import direct_export_from_json
+                    # Usa solo direct_export_from_json per gestire l'intero processo
+                    direct_export_success = direct_export_from_json(args.output_file, args.output_dir) 
+                    
+                    # Se l'esportazione diretta fallisce, prova il metodo standard come fallback
+                    if not direct_export_success:
+                        logging.warning("FALLBACK: Usando il metodo standard di esportazione")
+                        export_individual_job_files(all_jobs_data, args.output_dir, enrich=True)
+                        create_jobs_index(all_jobs_data, f"{args.output_dir}/jobs_index.json")
+                except Exception as e:
+                    logging.warning(f"Errore nell'esportazione diretta: {e}, usando il metodo standard")
+                    export_individual_job_files(all_jobs_data, args.output_dir, enrich=True)
+                    create_jobs_index(all_jobs_data, f"{args.output_dir}/jobs_index.json")
+                    
             # Pulisci i file di debug
             from .scraper import cleanup_debug_files
             cleanup_debug_files(keep_last_n=5)

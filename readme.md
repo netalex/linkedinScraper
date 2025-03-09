@@ -70,10 +70,10 @@ python -m linkedin_job_scraper "https://www.linkedin.com/jobs/view/3887695775/"
 ## 🔄 Flusso di lavoro con Claude
 
 1. Esegui lo scraper con esportazione individuale
-2. Controlla il file di indice `jobs_index.json` per identificare gli annunci più rilevanti
+2. Controlla il file di indice `job_files/jobs_index.json` per identificare gli annunci più rilevanti
 3. Per ogni annuncio interessante, utilizza il comando per generare un prompt per Claude:
 ```bash
-python -m linkedin_job_scraper.exporters.claude_exporter job_files/12345_CompanyName_JobTitle.json
+python -m exporters.claude_exporter job_files/12345_CompanyName_JobTitle.json
 ```
 4. Crea una nuova chat con Claude e incolla il prompt generato
 5. Interagisci con Claude per analizzare l'annuncio e preparare la candidatura

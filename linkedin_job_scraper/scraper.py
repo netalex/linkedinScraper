@@ -1273,29 +1273,58 @@ def direct_export_from_json(json_file: str, output_dir: str = 'job_files') -> bo
         # Ordina per rilevanza
         index.sort(key=lambda x: x.get('Relevance', 0), reverse=True)
         
-        # Salva l'indice - con controlli aggiuntivi
+        # Salva l'indice - con controlli aggiuntivi, debugging esteso e gestione degli errori migliorata
         try:
             # Verifica che l'indice non sia vuoto
             if not index:
                 logging.error("Errore: indice vuoto, nessun job da salvare!")
                 return False
+            
+            # Debug - mostra un esempio di voce dell'indice
+            if len(index) > 0:
+                logging.warning(f"DEBUG - Esempio voce indice: {json.dumps(index[0], indent=2)}")
                 
-            # Salva il file
+            # Salva il file con controllo esplicito della scrittura
             with open(index_file, 'w', encoding='utf-8') as f:
-                json.dump(index, f, indent=2, ensure_ascii=False)
+                json_content = json.dumps(index, indent=2, ensure_ascii=False)
+                logging.warning(f"DEBUG - Dimensione contenuto JSON: {len(json_content)} bytes")
+                f.write(json_content)
+                f.flush()  # Forza la scrittura su disco
                 
-            # Verifica che il file esista e non sia vuoto
-            if os.path.exists(index_file) and os.path.getsize(index_file) > 0:
-                logging.warning(f"SOLUZIONE DIRETTA: Indice creato correttamente con {len(index)} job")
+            # Verifica immediata della scrittura
+            if os.path.exists(index_file):
+                file_size = os.path.getsize(index_file)
+                logging.warning(f"DEBUG - File indice creato con dimensione: {file_size} bytes")
+                if file_size == 0:
+                    logging.error("ERRORE CRITICO: Il file indice è stato creato ma è vuoto!")
+                    # Ritenta la scrittura con approccio alternativo
+                    with open(index_file, 'w', encoding='utf-8') as f:
+                        for item in index:
+                            f.write(json.dumps(item) + "\n")
+                    logging.warning("Tentativo alternativo di scrittura completato")
+                else:
+                    logging.warning(f"SOLUZIONE DIRETTA: Indice creato correttamente con {len(index)} job")
             else:
-                logging.error(f"Errore: indice creato ma file vuoto o mancante!")
+                logging.error(f"ERRORE CRITICO: File indice non trovato dopo la scrittura!")
                 return False
+                
+            return True
         except Exception as e:
-            logging.error(f"Errore nel salvataggio dell'indice: {str(e)}")
+            logging.error(f"Errore dettagliato nel salvataggio dell'indice: {str(e)}")
+            import traceback
+            logging.error(traceback.format_exc())
+            
+            # Tentativo di recupero
+            try:
+                fallback_index_file = os.path.join(output_dir, 'jobs_index_fallback.json')
+                with open(fallback_index_file, 'w', encoding='utf-8') as f:
+                    json.dump(index, f)
+                logging.warning(f"Creato file indice di fallback: {fallback_index_file}")
+            except:
+                pass
+                
             return False
             
-        return True
-        
     except Exception as e:
         logging.error(f"Errore nella soluzione diretta: {str(e)}")
         import traceback
@@ -1393,10 +1422,10 @@ def process_search_results(search_url: str, output_file: str, max_jobs: int = 10
             logging.error(f"Errore nel test di verifica: {str(e)}")
         
         # Esporta direttamente dal file JSON per preservare Created At
-        output_dir = 'job_files'
-        direct_export_success = direct_export_from_json(output_file, output_dir)
-        if not direct_export_success:
-            logging.error("L'esportazione diretta è fallita")
+        # output_dir = 'job_files'
+        # direct_export_success = direct_export_from_json(output_file, output_dir)
+        # if not direct_export_success:
+        #     logging.error("L'esportazione diretta è fallita")
         
         # Rapporto sulle offerte non valide
         if len(all_jobs_data) != len(valid_jobs_data):
